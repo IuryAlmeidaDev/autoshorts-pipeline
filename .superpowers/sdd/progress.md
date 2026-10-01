@@ -5,7 +5,7 @@ Started: 2026-10-01
 
 ## Status
 - [x] Task 1: Scaffolding, Estrutura Base e Configurações
-- [ ] Task 2: Banco de Dados e Modelagem de Estados
+- [x] Task 2: Banco de Dados e Modelagem de Estados
 - [ ] Task 3: Scout & YouTube RSS Monitor
 - [ ] Task 4: IA Curadora e Analisador de Transcrição
 - [ ] Task 5: Download Cirúrgico de Segmentos
@@ -16,3 +16,4 @@ Started: 2026-10-01
 
 ## Task Log
 - 2026-10-01: Task 1 completed (Commit: e81812fb2c65aeb30bb582beee9ec825e4641cbf) - Scaffolding, dependências, Settings com auto-criação de storage e testes unitários.
+- 2026-10-01: Task 2 completed (Commit: 4d39a58448bc543552d0a1d4c7c9d72cff575008) - Schema SQLite, models (Channel, Video, Clip, Post), Database com CRUD/idempotência e testes unitários.
