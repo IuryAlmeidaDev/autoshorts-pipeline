@@ -13,6 +13,7 @@ from src.curator.transcript import TranscriptSegment
 from src.curator.analyzer import ClipMetadata
 from src.editor.subtitles import WordTimestamp
 from src.publisher.base import BasePublisher, PublishResult
+from src.dubbing import VoiceSynthesizer
 from src.orchestrator import PipelineOrchestrator
 
 
@@ -69,6 +70,7 @@ class TestOrchestratorInit:
         assert orchestrator.curator is not None
         assert orchestrator.downloader is not None
         assert orchestrator.renderer is not None
+        assert orchestrator.voice_synthesizer is not None
         assert isinstance(orchestrator.publishers, dict)
 
     def test_custom_dependency_injection(self, mock_settings: Settings, memory_db: Database):
@@ -76,6 +78,7 @@ class TestOrchestratorInit:
         custom_scout = MagicMock()
         custom_curator = MagicMock()
         custom_pub = MagicMock(spec=BasePublisher)
+        custom_voice_synth = MagicMock(spec=VoiceSynthesizer)
         publishers = {"custom": custom_pub}
 
         orchestrator = PipelineOrchestrator(
@@ -84,9 +87,11 @@ class TestOrchestratorInit:
             publishers=publishers,
             scout=custom_scout,
             curator=custom_curator,
+            voice_synthesizer=custom_voice_synth,
         )
         assert orchestrator.scout == custom_scout
         assert orchestrator.curator == custom_curator
+        assert orchestrator.voice_synthesizer == custom_voice_synth
         assert orchestrator.publishers["custom"] == custom_pub
 
 
@@ -262,6 +267,227 @@ class TestProcessEpisode:
         # renderer foi chamado com words=None como fallback
         mock_renderer.render_clip.assert_called_once()
         assert mock_renderer.render_clip.call_args.kwargs.get("words") is None
+
+    def test_process_episode_international_channel_with_dubbing(
+        self, mock_settings: Settings, memory_db: Database, tmp_path: Path
+    ):
+        """Verifica fluxo completo de dublagem para canal com language='en'."""
+        memory_db.add_channel(channel_id="UC_EN_CH", name="English Channel", language="en")
+        episode = Episode(
+            video_id="yt_intl_123",
+            channel_id="UC_EN_CH",
+            title="International Episode",
+        )
+
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_transcript.return_value = [
+            TranscriptSegment(text="International speech", start=0.0, duration=15.0)
+        ]
+        mock_fetcher.format_transcript_with_timestamps.return_value = "[00:00 - 00:15] International speech"
+
+        mock_curator = MagicMock()
+        mock_curator.analyze_and_translate_transcript.return_value = [
+            ClipMetadata(
+                start_time=0.0,
+                end_time=30.0,
+                hook_title="MOMENTO INCRÍVEL!",
+                viral_score=9.7,
+                translated_script="Este é um momento incrível traduzido para português.",
+                voice_gender="female",
+            )
+        ]
+
+        raw_video_path = tmp_path / "storage" / "temp" / "yt_intl_123_0_30.mp4"
+        raw_video_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_video_path.write_bytes(b"raw_content")
+
+        mock_downloader = MagicMock()
+        mock_downloader.download_segment.return_value = raw_video_path
+
+        rendered_video_path = tmp_path / "storage" / "output" / "clip_dubbed.mp4"
+        rendered_video_path.parent.mkdir(parents=True, exist_ok=True)
+        rendered_video_path.write_bytes(b"rendered_content")
+
+        mock_renderer = MagicMock()
+        mock_renderer.render_clip.return_value = rendered_video_path
+
+        dubbing_audio_path = tmp_path / "storage" / "temp" / "tts_dub_123.mp3"
+        dubbing_audio_path.write_bytes(b"tts_audio_content")
+
+        mock_synth = MagicMock(spec=VoiceSynthesizer)
+        mock_synth.synthesize.return_value = (
+            dubbing_audio_path,
+            [WordTimestamp(word="Este", start=0.0, end=0.4)],
+        )
+
+        orchestrator = PipelineOrchestrator(
+            settings=mock_settings,
+            db=memory_db,
+            transcript_fetcher=mock_fetcher,
+            curator=mock_curator,
+            downloader=mock_downloader,
+            renderer=mock_renderer,
+            voice_synthesizer=mock_synth,
+        )
+
+        with patch("src.orchestrator.extract_subtitles_with_whisper") as mock_whisper:
+            clips = orchestrator.process_episode(episode)
+            mock_whisper.assert_not_called()
+
+        assert len(clips) == 1
+        clip = clips[0]
+        assert clip.hook_title == "MOMENTO INCRÍVEL!"
+        assert clip.file_path == str(rendered_video_path)
+
+        # Transcrição buscada em inglês
+        mock_fetcher.fetch_transcript.assert_called_once_with(
+            "yt_intl_123", languages=["en", "en-US"]
+        )
+
+        # Curador chamado com analyze_and_translate_transcript
+        mock_curator.analyze_and_translate_transcript.assert_called_once()
+        mock_curator.analyze_transcript.assert_not_called()
+
+        # Síntese de voz com gênero correto
+        mock_synth.synthesize.assert_called_once_with(
+            "Este é um momento incrível traduzido para português.",
+            voice_gender="female",
+        )
+
+        # Renderização com ducking e dubbing_audio
+        mock_renderer.render_clip.assert_called_once()
+        kwargs = mock_renderer.render_clip.call_args.kwargs
+        assert kwargs["dubbing_audio"] == dubbing_audio_path
+        assert kwargs["ducking_volume"] == 0.15
+        assert kwargs["words"] == [WordTimestamp(word="Este", start=0.0, end=0.4)]
+
+        # Arquivo de áudio temporário removido
+        assert dubbing_audio_path.exists() is False
+
+        # Vídeo e posts registrados
+        assert memory_db.is_video_processed("yt_intl_123") is True
+        assert len(memory_db.get_pending_posts()) == 4
+
+    def test_process_episode_international_channel_fallback_no_script(
+        self, mock_settings: Settings, memory_db: Database, tmp_path: Path
+    ):
+        """Verifica fallback para legendas quando clipe em inglês não possui translated_script."""
+        memory_db.add_channel(channel_id="UC_EN_FALLBACK", name="English Fallback", language="en")
+        episode = Episode(
+            video_id="yt_intl_noscript",
+            channel_id="UC_EN_FALLBACK",
+            title="No Script Episode",
+        )
+
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_transcript.return_value = [
+            TranscriptSegment(text="No script audio", start=0.0, duration=10.0)
+        ]
+        mock_fetcher.format_transcript_with_timestamps.return_value = "Audio text"
+
+        mock_curator = MagicMock()
+        mock_curator.analyze_and_translate_transcript.return_value = [
+            ClipMetadata(
+                start_time=0.0,
+                end_time=30.0,
+                hook_title="HOOK SEM SCRIPT",
+                viral_score=8.5,
+                translated_script=None,
+            )
+        ]
+
+        raw_video_path = tmp_path / "raw_fallback.mp4"
+        raw_video_path.write_bytes(b"raw")
+        mock_downloader = MagicMock()
+        mock_downloader.download_segment.return_value = raw_video_path
+
+        rendered_video_path = tmp_path / "rendered_fallback.mp4"
+        rendered_video_path.write_bytes(b"rendered")
+        mock_renderer = MagicMock()
+        mock_renderer.render_clip.return_value = rendered_video_path
+
+        mock_synth = MagicMock(spec=VoiceSynthesizer)
+
+        orchestrator = PipelineOrchestrator(
+            settings=mock_settings,
+            db=memory_db,
+            transcript_fetcher=mock_fetcher,
+            curator=mock_curator,
+            downloader=mock_downloader,
+            renderer=mock_renderer,
+            voice_synthesizer=mock_synth,
+        )
+
+        with patch("src.orchestrator.extract_subtitles_with_whisper") as mock_whisper:
+            mock_whisper.return_value = [WordTimestamp(word="Audio", start=0.0, end=0.5)]
+            clips = orchestrator.process_episode(episode)
+            mock_whisper.assert_called_once()
+
+        mock_synth.synthesize.assert_not_called()
+        assert len(clips) == 1
+        kwargs = mock_renderer.render_clip.call_args.kwargs
+        assert kwargs.get("dubbing_audio") is None
+
+    def test_process_episode_national_channel_standard_flow(
+        self, mock_settings: Settings, memory_db: Database, tmp_path: Path
+    ):
+        """Verifica preservação do fluxo nacional padrão quando canal possui language='pt'."""
+        memory_db.add_channel(channel_id="UC_PT_CH", name="Canal Brasileiro", language="pt")
+        episode = Episode(
+            video_id="yt_pt_vid",
+            channel_id="UC_PT_CH",
+            title="Vídeo Brasileiro",
+        )
+
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch_transcript.return_value = [
+            TranscriptSegment(text="Fala galera", start=0.0, duration=10.0)
+        ]
+        mock_fetcher.format_transcript_with_timestamps.return_value = "Fala galera"
+
+        mock_curator = MagicMock()
+        mock_curator.analyze_transcript.return_value = [
+            ClipMetadata(
+                start_time=0.0,
+                end_time=30.0,
+                hook_title="GANCHO BR",
+                viral_score=9.1,
+            )
+        ]
+
+        raw_video_path = tmp_path / "raw_pt.mp4"
+        raw_video_path.write_bytes(b"raw")
+        mock_downloader = MagicMock()
+        mock_downloader.download_segment.return_value = raw_video_path
+
+        rendered_video_path = tmp_path / "rendered_pt.mp4"
+        rendered_video_path.write_bytes(b"rendered")
+        mock_renderer = MagicMock()
+        mock_renderer.render_clip.return_value = rendered_video_path
+
+        mock_synth = MagicMock(spec=VoiceSynthesizer)
+
+        orchestrator = PipelineOrchestrator(
+            settings=mock_settings,
+            db=memory_db,
+            transcript_fetcher=mock_fetcher,
+            curator=mock_curator,
+            downloader=mock_downloader,
+            renderer=mock_renderer,
+            voice_synthesizer=mock_synth,
+        )
+
+        with patch("src.orchestrator.extract_subtitles_with_whisper") as mock_whisper:
+            mock_whisper.return_value = [WordTimestamp(word="Fala", start=0.0, end=0.5)]
+            clips = orchestrator.process_episode(episode)
+            mock_whisper.assert_called_once()
+
+        mock_curator.analyze_transcript.assert_called_once()
+        mock_curator.analyze_and_translate_transcript.assert_not_called()
+        mock_synth.synthesize.assert_not_called()
+        assert len(clips) == 1
+        kwargs = mock_renderer.render_clip.call_args.kwargs
+        assert kwargs.get("dubbing_audio") is None
 
 
 class TestRunScoutCycle:
@@ -529,6 +755,39 @@ class TestCliMain:
         assert len(channels) == 1
         assert channels[0].channel_id == "UC_CLI_123"
         assert channels[0].name == "Canal CLI Teste"
+        assert channels[0].language == "pt"
+
+    def test_cli_add_channel_with_lang_en(self, tmp_path: Path):
+        """Valida add-channel com flag --lang en."""
+        from main import main
+
+        test_db_path = tmp_path / "cli_test_en.db"
+        with patch("main.settings") as mock_settings, patch("src.orchestrator.default_settings", mock_settings):
+            mock_settings.DB_PATH = test_db_path
+            exit_code = main(["add-channel", "UC_CLI_EN", "Canal Em Ingles", "--lang", "en"])
+
+        assert exit_code == 0
+        db = Database(test_db_path)
+        channel = db.get_channel("UC_CLI_EN")
+        assert channel is not None
+        assert channel.name == "Canal Em Ingles"
+        assert channel.language == "en"
+
+    def test_cli_add_channel_with_language_flag(self, tmp_path: Path):
+        """Valida add-channel com flag longa --language en."""
+        from main import main
+
+        test_db_path = tmp_path / "cli_test_lang.db"
+        with patch("main.settings") as mock_settings, patch("src.orchestrator.default_settings", mock_settings):
+            mock_settings.DB_PATH = test_db_path
+            exit_code = main(["add-channel", "UC_CLI_LANG", "Canal Lang Flag", "--language", "en"])
+
+        assert exit_code == 0
+        db = Database(test_db_path)
+        channel = db.get_channel("UC_CLI_LANG")
+        assert channel is not None
+        assert channel.name == "Canal Lang Flag"
+        assert channel.language == "en"
 
     def test_cli_once(self):
         """Valida execução do comando once via CLI."""

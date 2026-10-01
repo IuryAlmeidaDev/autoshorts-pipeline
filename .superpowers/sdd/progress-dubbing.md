@@ -7,7 +7,7 @@ Plan: `docs/superpowers/plans/2026-10-01-dubbing-translation.md`
 - [x] Task 2: Curador com Tradução e Adaptação de Roteiro para Português
 - [x] Task 3: Sintetizador de Voz Neural com Edge-TTS
 - [x] Task 4: Mixagem de Áudio com Ducking no Renderizador FFmpeg
-- [ ] Task 5: Roteamento de Episódios Internacionais no Orquestrador e CLI
+- [x] Task 5: Roteamento de Episódios Internacionais no Orquestrador e CLI
 
 ## Task Log
 ### Task 1: Suporte a Múltiplos Idiomas no Modelo e Banco de Dados
@@ -42,3 +42,13 @@ Plan: `docs/superpowers/plans/2026-10-01-dubbing-translation.md`
 - Atualizado `VideoRenderer.render_clip` com suporte a `dubbing_audio` e `ducking_volume`, validando a existência do arquivo de dublagem via `FileNotFoundError`.
 - Adicionados 8 novos testes em `tests/test_renderer.py` cobrindo smart crop com dublagem (volume padrão e customizado), blurred background com dublagem, combinação com gancho e legendas ASS, montagem de comando dual-audio e validação de arquivo inexistente.
 - Suíte completa de testes executada com sucesso (189 testes passando, zero regressões).
+
+### Task 5: Roteamento de Episódios Internacionais no Orquestrador e CLI
+- Integrado `VoiceSynthesizer` em `PipelineOrchestrator` (`src/orchestrator.py`) com injeção de dependência e inicialização padrão.
+- Adicionado método `get_channel(channel_id: str) -> Optional[Channel]` em `Database` (`src/database.py`).
+- Implementado roteamento inteligente em `process_episode`:
+  - Para canais com `language == "en"`: busca transcrição com `languages=["en", "en-US"]`, aciona `analyze_and_translate_transcript`, executa síntese neural de áudio via `VoiceSynthesizer`, renderiza o vídeo 9:16 com áudio de dublagem, ducking no áudio original (volume 0.15) e legendas dinâmicas perfeitamente sincronizadas, com limpeza automática do arquivo temporário de dublagem e fallback para legendas Whisper se não houver script traduzido.
+  - Para canais nacionais (`language != "en"`): preserva intacto o fluxo original com legendas Whisper e sem áudio secundário.
+- Atualizado comando CLI `add-channel` (`main.py`) com flags `--lang` e `--language` (default: `"pt"`, choices: `["pt", "en"]`).
+- Adicionados 5 novos testes de orquestração e CLI em `tests/test_orchestrator.py`.
+- Suíte completa de testes executada com 100% de sucesso (194 testes passando, zero regressões).

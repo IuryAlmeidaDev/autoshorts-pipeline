@@ -38,14 +38,16 @@ def cmd_add_channel(args: argparse.Namespace, db: Database) -> int:
     """Cadastra um novo canal no banco de dados para monitoramento contínuo."""
     channel_id = args.channel_id.strip()
     name = args.name.strip()
-    channel = db.add_channel(channel_id=channel_id, name=name)
+    language = getattr(args, "lang", "pt")
+    channel = db.add_channel(channel_id=channel_id, name=name, language=language)
     logger.info(
-        "Canal cadastrado com sucesso: %s (ID: %s, DB ID: %s)",
+        "Canal cadastrado com sucesso: %s (ID: %s, DB ID: %s, Idioma: %s)",
         channel.name,
         channel.channel_id,
         channel.id,
+        channel.language,
     )
-    print(f"Canal '{channel.name}' ({channel.channel_id}) cadastrado com sucesso.")
+    print(f"Canal '{channel.name}' ({channel.channel_id}) cadastrado com sucesso [Idioma: {channel.language}].")
     return 0
 
 
@@ -77,6 +79,14 @@ def create_parser() -> argparse.ArgumentParser:
     add_parser = subparsers.add_parser("add-channel", help="Cadastra canal para monitorar")
     add_parser.add_argument("channel_id", help="ID do canal no YouTube (ex: UCxxxx...)")
     add_parser.add_argument("name", help="Nome descritivo do canal")
+    add_parser.add_argument(
+        "--lang",
+        "--language",
+        dest="lang",
+        default="pt",
+        choices=["pt", "en"],
+        help="Idioma principal do canal (padrão: pt)",
+    )
 
     # Comando 'once'
     subparsers.add_parser("once", help="Executa uma única rodada imediata (scout + publish)")

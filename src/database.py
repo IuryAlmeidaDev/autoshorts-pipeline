@@ -127,6 +127,26 @@ class Database:
                 created_at=datetime.fromisoformat(row["created_at"]),
             )
 
+    def get_channel(self, channel_id: str) -> Optional[Channel]:
+        """Retorna os dados de um canal cadastrado a partir de seu channel_id."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, channel_id, name, active, language, created_at FROM channels WHERE channel_id = ? LIMIT 1",
+                (str(channel_id),),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return Channel(
+                id=row["id"],
+                channel_id=row["channel_id"],
+                name=row["name"],
+                active=bool(row["active"]),
+                language=row["language"] if "language" in row.keys() and row["language"] else "pt",
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+
     def get_active_channels(self, language: Optional[str] = None) -> List[Channel]:
         """Retorna todos os canais configurados e ativos, opcionalmente filtrados por idioma."""
         with self.get_connection() as conn:
