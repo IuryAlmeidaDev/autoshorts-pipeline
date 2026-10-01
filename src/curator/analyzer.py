@@ -157,7 +157,7 @@ def parse_llm_clip_response(
 class CuratorAnalyzer:
     """Motor de inteligência artificial para curadoria e detecção de cortes virais."""
 
-    def __init__(self, api_key: str = "", model_name: str = "gemini-2.5-flash") -> None:
+    def __init__(self, api_key: str = "", model_name: str = "gemini-3.5-flash-lite") -> None:
         self.api_key = (
             api_key
             or getattr(settings, "GEMINI_API_KEY", "")
@@ -176,15 +176,25 @@ class CuratorAnalyzer:
                 logger.warning("Biblioteca google-genai não disponível no ambiente.")
 
     def _call_gemini_api(self, prompt: str) -> str:
-        """Executa a chamada direta à API do Gemini."""
+        """Executa a chamada direta à API do Gemini com fallback resiliente de modelos."""
         if not self.client:
             raise RuntimeError("Cliente do Gemini não inicializado.")
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-        )
-        return getattr(response, "text", "") or ""
+        candidate_models = [self.model_name, "gemini-3.5-flash", "gemini-flash-latest"]
+        last_error = None
+
+        for model in candidate_models:
+            try:
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                return getattr(response, "text", "") or ""
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Modelo '%s' indisponível (%s), tentando próximo...", model, exc)
+
+        raise RuntimeError(f"Todos os modelos do Gemini falharam. Último erro: {last_error}")
 
     def analyze_transcript(
         self,
