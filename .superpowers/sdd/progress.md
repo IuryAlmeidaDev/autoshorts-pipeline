@@ -4,7 +4,7 @@ Plan: `docs/superpowers/plans/2026-10-01-autoshorts-pipeline.md`
 Started: 2026-10-01
 
 ## Status
-- [ ] Task 1: Scaffolding, Estrutura Base e Configurações
+- [x] Task 1: Scaffolding, Estrutura Base e Configurações
 - [ ] Task 2: Banco de Dados e Modelagem de Estados
 - [ ] Task 3: Scout & YouTube RSS Monitor
 - [ ] Task 4: IA Curadora e Analisador de Transcrição
@@ -15,3 +15,4 @@ Started: 2026-10-01
 - [ ] Task 9: Orquestrador Geral e Dockerização
 
 ## Task Log
+- 2026-10-01: Task 1 completed (Commit: e81812fb2c65aeb30bb582beee9ec825e4641cbf) - Scaffolding, dependências, Settings com auto-criação de storage e testes unitários.
