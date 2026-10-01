@@ -6,7 +6,7 @@ Plan: `docs/superpowers/plans/2026-10-01-dubbing-translation.md`
 - [x] Task 1: Suporte a Múltiplos Idiomas no Modelo e Banco de Dados
 - [x] Task 2: Curador com Tradução e Adaptação de Roteiro para Português
 - [x] Task 3: Sintetizador de Voz Neural com Edge-TTS
-- [ ] Task 4: Mixagem de Áudio com Ducking no Renderizador FFmpeg
+- [x] Task 4: Mixagem de Áudio com Ducking no Renderizador FFmpeg
 - [ ] Task 5: Roteamento de Episódios Internacionais no Orquestrador e CLI
 
 ## Task Log
@@ -36,4 +36,9 @@ Plan: `docs/superpowers/plans/2026-10-01-dubbing-translation.md`
 - Criada suíte de testes unitários determinísticos em `tests/test_dubbing.py` com mocks de streaming assíncrono.
 - Suíte completa de testes executada com sucesso (181 testes passando, zero regressões).
 
-
+### Task 4: Mixagem de Áudio com Ducking no Renderizador FFmpeg
+- Atualizado `build_filter_complex` em `src/editor/renderer.py` com suporte aos parâmetros `has_dubbing: bool = False` e `ducking_volume: float = 0.15`. Quando ativado, constrói os labels `[0:v]` e `[vout]` no grafo de vídeo e adiciona a cadeia de mixagem de áudio com atenuação ducking: `[0:a]volume={ducking_volume}[bg_audio];[1:a]volume=1.0[fg_audio];[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]`.
+- Atualizado `build_ffmpeg_render_command` para aceitar `dubbing_audio: Optional[Union[Path, str]] = None`. Quando presente, insere o segundo input `-i`, define `-filter_complex` e mapeia `-map "[vout]" -map "[aout]"`. Em fluxos sem dublagem, mantém compatibilidade exata com `-vf`.
+- Atualizado `VideoRenderer.render_clip` com suporte a `dubbing_audio` e `ducking_volume`, validando a existência do arquivo de dublagem via `FileNotFoundError`.
+- Adicionados 8 novos testes em `tests/test_renderer.py` cobrindo smart crop com dublagem (volume padrão e customizado), blurred background com dublagem, combinação com gancho e legendas ASS, montagem de comando dual-audio e validação de arquivo inexistente.
+- Suíte completa de testes executada com sucesso (189 testes passando, zero regressões).
