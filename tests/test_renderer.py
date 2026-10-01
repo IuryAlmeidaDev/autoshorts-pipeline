@@ -228,6 +228,61 @@ class TestBuildFilterComplex:
         assert "drawtext=" in fc
         assert "ass=" in fc or "subtitles=" in fc
 
+    def test_smart_crop_with_dubbing_default_ducking(self):
+        fc = build_filter_complex(mode="smart_crop", has_dubbing=True)
+        assert "[0:v]crop=ih*9/16:ih:(iw-ow)/2:0,scale=1080:1920[vout]" in fc
+        assert "[0:a]volume=0.15[bg_audio]" in fc
+        assert "[1:a]volume=1.0[fg_audio]" in fc
+        assert "[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]" in fc
+
+    def test_smart_crop_with_dubbing_custom_ducking(self):
+        fc = build_filter_complex(
+            mode="smart_crop", has_dubbing=True, ducking_volume=0.25
+        )
+        assert "[0:a]volume=0.25[bg_audio]" in fc
+        assert "[1:a]volume=1.0[fg_audio]" in fc
+        assert "[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]" in fc
+
+    def test_smart_crop_with_dubbing_hook_and_subtitles(self, tmp_path):
+        sub_file = tmp_path / "sub.ass"
+        sub_file.write_text("dummy", encoding="utf-8")
+        fc = build_filter_complex(
+            mode="smart_crop",
+            hook_text="GANCHO VIRAL",
+            subtitle_ass_path=sub_file,
+            has_dubbing=True,
+            ducking_volume=0.15,
+        )
+        assert fc.startswith("[0:v]crop=")
+        assert "drawtext=" in fc
+        assert "ass=" in fc or "subtitles=" in fc
+        assert "[vout];[0:a]volume=0.15[bg_audio]" in fc
+        assert "[1:a]volume=1.0[fg_audio]" in fc
+        assert "[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]" in fc
+
+    def test_blurred_background_with_dubbing(self):
+        fc = build_filter_complex(mode="blurred_background", has_dubbing=True)
+        assert fc.startswith("[0:v]split=2[bg_in][fg_in]")
+        assert "[bg][fg]overlay=(W-w)/2:(H-h)/2[vout]" in fc
+        assert "[0:a]volume=0.15[bg_audio]" in fc
+        assert "[1:a]volume=1.0[fg_audio]" in fc
+        assert "[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]" in fc
+
+    def test_blurred_background_with_dubbing_and_subtitles(self, tmp_path):
+        sub_file = tmp_path / "sub.ass"
+        sub_file.write_text("dummy", encoding="utf-8")
+        fc = build_filter_complex(
+            mode="blurred_background",
+            subtitle_ass_path=sub_file,
+            has_dubbing=True,
+        )
+        assert fc.startswith("[0:v]split=2[bg_in][fg_in]")
+        assert "overlay=" in fc
+        assert "ass=" in fc
+        assert "[vout];[0:a]volume=0.15[bg_audio]" in fc
+        assert "[1:a]volume=1.0[fg_audio]" in fc
+        assert "[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]" in fc
+
     def test_invalid_mode_raises_value_error(self):
         with pytest.raises(ValueError, match="Modo inválido"):
             build_filter_complex(mode="unsupported_mode")
@@ -268,6 +323,46 @@ class TestBuildFfmpegRenderCommand:
         assert "-ar" in cmd
         assert "44100" in cmd
         assert str(output_vid) in cmd
+
+    def test_build_ffmpeg_render_command_with_dubbing(self):
+        input_vid = Path("/videos/clip.mp4")
+        dub_audio = Path("/audios/dubbing.mp3")
+        output_vid = Path("/outputs/short.mp4")
+        fc = "[0:v]crop=ih*9/16:ih:(iw-ow)/2:0,scale=1080:1920[vout];[0:a]volume=0.15[bg_audio];[1:a]volume=1.0[fg_audio];[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+
+        cmd = build_ffmpeg_render_command(
+            input_video=input_vid,
+            output_video=output_vid,
+            filter_complex=fc,
+            dubbing_audio=dub_audio,
+            ffmpeg_bin="ffmpeg",
+        )
+
+        assert isinstance(cmd, list)
+        assert cmd[0] == "ffmpeg"
+        assert "-y" in cmd
+
+        input_indices = [i for i, arg in enumerate(cmd) if arg == "-i"]
+        assert len(input_indices) == 2
+        assert cmd[input_indices[0] + 1] == str(input_vid)
+        assert cmd[input_indices[1] + 1] == str(dub_audio)
+
+        assert "-filter_complex" in cmd
+        assert "-vf" not in cmd
+        fc_index = cmd.index("-filter_complex")
+        assert cmd[fc_index + 1] == fc
+
+        map_indices = [i for i, arg in enumerate(cmd) if arg == "-map"]
+        assert len(map_indices) == 2
+        mapped_streams = [cmd[idx + 1] for idx in map_indices]
+        assert "[vout]" in mapped_streams
+        assert "[aout]" in mapped_streams
+
+        assert "-c:v" in cmd
+        assert "libx264" in cmd
+        assert "-c:a" in cmd
+        assert "aac" in cmd
+        assert cmd[-1] == str(output_vid)
 
 
 class TestVideoRenderer:
@@ -362,3 +457,62 @@ class TestVideoRenderer:
                 words=[],
                 output_name="not_created.mp4",
             )
+
+    def test_render_clip_dubbing_audio_not_found_raises_error(self, tmp_path):
+        renderer = VideoRenderer(temp_dir=tmp_path / "temp", output_dir=tmp_path / "out")
+        input_video = tmp_path / "input.mp4"
+        input_video.write_bytes(b"dummy")
+
+        with pytest.raises(FileNotFoundError, match="Áudio de dublagem não encontrado"):
+            renderer.render_clip(
+                input_video=input_video,
+                hook_text="Erro",
+                words=[],
+                output_name="test.mp4",
+                dubbing_audio=tmp_path / "non_existent_dubbing.mp3",
+            )
+
+    @patch("subprocess.run")
+    def test_render_clip_with_dubbing_audio_success(
+        self, mock_subprocess_run, tmp_path
+    ):
+        temp_dir = tmp_path / "temp"
+        out_dir = tmp_path / "out"
+        renderer = VideoRenderer(temp_dir=temp_dir, output_dir=out_dir)
+
+        input_video = tmp_path / "input_clip.mp4"
+        input_video.write_bytes(b"dummy video data")
+
+        dubbing_audio = tmp_path / "dubbing.mp3"
+        dubbing_audio.write_bytes(b"dummy audio data")
+
+        words = [
+            WordTimestamp(word="DUBLADO", start=0.0, end=0.5),
+        ]
+
+        def side_effect(cmd, **kwargs):
+            out_file = out_dir / "dubbed_final.mp4"
+            out_file.write_bytes(b"final dubbed mp4 bytes")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_subprocess_run.side_effect = side_effect
+
+        result_path = renderer.render_clip(
+            input_video=input_video,
+            hook_text="CORTE DUBLADO",
+            words=words,
+            output_name="dubbed_final.mp4",
+            dubbing_audio=dubbing_audio,
+            ducking_volume=0.15,
+        )
+
+        assert result_path.exists()
+        assert result_path.name == "dubbed_final.mp4"
+        assert mock_subprocess_run.called
+
+        called_cmd = mock_subprocess_run.call_args[0][0]
+        assert str(dubbing_audio) in called_cmd
+        assert "-filter_complex" in called_cmd
+        assert "-map" in called_cmd
+        assert "[vout]" in called_cmd
+        assert "[aout]" in called_cmd

@@ -47,8 +47,10 @@ def build_filter_complex(
     mode: str = "smart_crop",
     subtitle_ass_path: Optional[Union[Path, str]] = None,
     hook_text: Optional[str] = None,
+    has_dubbing: bool = False,
+    ducking_volume: float = 0.15,
 ) -> str:
-    """Constrói a string de filtros de vídeo (-vf) para conversão para formato 9:16 (1080x1920).
+    """Constrói a string de filtros de vídeo (-vf ou -filter_complex) para conversão para formato 9:16 (1080x1920).
 
     Modos suportados:
         - smart_crop: Recorta a área central 9:16 de um vídeo 16:9 e escala para 1080x1920.
@@ -58,9 +60,11 @@ def build_filter_complex(
         mode: 'smart_crop' ou 'blurred_background'.
         subtitle_ass_path: Caminho opcional para arquivo de legenda .ass.
         hook_text: Texto opcional de gancho viral para posicionar no topo do vídeo.
+        has_dubbing: Se True, gera filtros com labels [0:v], [vout], atenuação de áudio original e amix.
+        ducking_volume: Volume do áudio original atenuado quando has_dubbing=True (padrão: 0.15 / -16dB).
 
     Returns:
-        String formatada para o parâmetro -vf do FFmpeg.
+        String formatada para o parâmetro -vf ou -filter_complex do FFmpeg.
 
     Raises:
         ValueError: Se o modo for inválido.
@@ -97,27 +101,72 @@ def build_filter_complex(
         ass_filter = f"ass='{escaped_sub_path}'"
         additional_filters.append(ass_filter)
 
-    if not additional_filters:
-        return base_filter
+    if not has_dubbing:
+        if not additional_filters:
+            return base_filter
+        return f"{base_filter},{','.join(additional_filters)}"
 
-    return f"{base_filter},{','.join(additional_filters)}"
+    # Se houver dublagem, monta grafo complexo ligando [0:v] -> [vout] e mixando [0:a] atenuado + [1:a]
+    video_filter = f"[0:v]{base_filter}"
+    if additional_filters:
+        video_filter = f"{video_filter},{','.join(additional_filters)}"
+    video_filter = f"{video_filter}[vout]"
+
+    audio_filter = (
+        f"[0:a]volume={ducking_volume}[bg_audio];"
+        f"[1:a]volume=1.0[fg_audio];"
+        f"[bg_audio][fg_audio]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+    )
+
+    return f"{video_filter};{audio_filter}"
 
 
 def build_ffmpeg_render_command(
     input_video: Union[Path, str],
     output_video: Union[Path, str],
     filter_complex: str,
+    dubbing_audio: Optional[Union[Path, str]] = None,
     ffmpeg_bin: str = "ffmpeg",
 ) -> list[str]:
     """Monta a lista de argumentos de comando do FFmpeg com codecs otimizados para Shorts/Reels/TikTok.
 
     Argumentos:
         - -y: Sobrescreve saída se existir.
-        - -i: Arquivo de entrada.
-        - -vf: Filtros de enquadramento 9:16, gancho e legendas.
+        - -i: Arquivo de entrada original (e segundo -i para dublagem se fornecido).
+        - -vf / -filter_complex: Filtros de enquadramento 9:16, gancho, legendas e mixagem ducking.
+        - -map: Mapeia [vout] e [aout] quando houver dublagem secundária.
         - -c:v libx264 -preset fast -crf 22: Otimização de tamanho/qualidade de vídeo.
         - -c:a aac -b:a 192k -ar 44100: Áudio cristalino de alta fidelidade.
     """
+    if dubbing_audio is not None:
+        return [
+            ffmpeg_bin,
+            "-y",
+            "-i",
+            str(input_video),
+            "-i",
+            str(dubbing_audio),
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "[vout]",
+            "-map",
+            "[aout]",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "22",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "44100",
+            str(output_video),
+        ]
+
     return [
         ffmpeg_bin,
         "-y",
@@ -164,8 +213,10 @@ class VideoRenderer:
         words: Optional[list[WordTimestamp]] = None,
         output_name: str = "clip.mp4",
         mode: str = "smart_crop",
+        dubbing_audio: Optional[Union[Path, str]] = None,
+        ducking_volume: float = 0.15,
     ) -> Path:
-        """Renderiza um corte em formato vertical 9:16 com gancho de texto e legendas dinâmicas.
+        """Renderiza um corte em formato vertical 9:16 com gancho de texto, legendas dinâmicas e dublagem opcional.
 
         Args:
             input_video: Caminho para o corte horizontal MP4 original.
@@ -173,17 +224,25 @@ class VideoRenderer:
             words: Lista de palavras com timestamps para geração de legendas dinâmicas.
             output_name: Nome do arquivo final MP4.
             mode: Modo de reenquadramento ('smart_crop' ou 'blurred_background').
+            dubbing_audio: Caminho opcional para arquivo de áudio de dublagem secundário.
+            ducking_volume: Volume do áudio de fundo original (ducking) quando dublado (padrão: 0.15).
 
         Returns:
             Caminho absoluto para o vídeo final renderizado.
 
         Raises:
-            FileNotFoundError: Se o vídeo de entrada não existir.
+            FileNotFoundError: Se o vídeo de entrada ou o áudio de dublagem não existirem.
             RenderError: Se o FFmpeg falhar ou o arquivo de saída não for gerado.
         """
         in_path = Path(input_video)
         if not in_path.exists():
             raise FileNotFoundError(f"Vídeo de entrada não encontrado: {in_path}")
+
+        dub_path: Optional[Path] = None
+        if dubbing_audio is not None:
+            dub_path = Path(dubbing_audio)
+            if not dub_path.exists():
+                raise FileNotFoundError(f"Áudio de dublagem não encontrado: {dub_path}")
 
         if not output_name.lower().endswith(".mp4"):
             output_name = f"{output_name}.mp4"
@@ -197,16 +256,20 @@ class VideoRenderer:
             subtitle_path.write_text(ass_content, encoding="utf-8")
             logger.info(f"Arquivo de legendas ASS gerado em: {subtitle_path}")
 
+        has_dubbing = dub_path is not None
         filter_str = build_filter_complex(
             mode=mode,
             subtitle_ass_path=subtitle_path,
             hook_text=hook_text,
+            has_dubbing=has_dubbing,
+            ducking_volume=ducking_volume,
         )
 
         cmd = build_ffmpeg_render_command(
             input_video=in_path,
             output_video=output_path,
             filter_complex=filter_str,
+            dubbing_audio=dub_path,
             ffmpeg_bin=self.ffmpeg_bin,
         )
 
