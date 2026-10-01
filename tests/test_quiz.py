@@ -6,9 +6,11 @@ from unittest.mock import MagicMock, patch
 from PIL import Image
 
 from src.quiz import (
+    AIQuizCurator,
     QuizData,
     QuizGenerationError,
     QuizGenerator,
+    QuizPipelineOrchestrator,
     QuizQuestion,
     QuizTheme,
     QuizFrameRenderer,
@@ -179,3 +181,130 @@ class TestQuizGenerator:
         assert mock_synth.synthesize.call_count >= 3  # Intro, Question 1, Reveal 1, Outro
         assert mock_run.call_count >= 4
         assert mock_popen.call_count == 1  # 1 countdown timer
+
+
+class TestAIQuizCurator:
+    """Testes da curadoria por inteligência artificial e fallbacks."""
+
+    def test_curator_fallback_when_no_client(self):
+        curator = AIQuizCurator(api_key="")
+        quiz = curator.generate_quiz(category="ciencia_e_universo")
+        assert len(quiz.questions) == 3
+        assert "CIENCIA" in quiz.theme.title.upper()
+        for q in quiz.questions:
+            assert len(q.options) >= 2
+            assert 0 <= q.correct_index < len(q.options)
+
+    def test_remove_emojis_utility(self):
+        from src.quiz.ai_curator import _remove_emojis
+        text_with_emoji = "🧠 TESTE DE INTELIGÊNCIA ⚡ 💡!"
+        cleaned = _remove_emojis(text_with_emoji)
+        assert "TESTE DE INTELIGÊNCIA !" == cleaned
+        assert "🧠" not in cleaned
+        assert "⚡" not in cleaned
+
+    def test_extract_clean_json(self):
+        from src.quiz.ai_curator import _extract_clean_json
+        raw = "Aqui está seu quiz:\n```json\n{\"theme_title\": \"TESTE\", \"questions\": []}\n```\nObrigado!"
+        data = _extract_clean_json(raw)
+        assert data is not None
+        assert data["theme_title"] == "TESTE"
+
+
+class TestQuizDatabase:
+    """Testes de persistência de histórico de quizzes no SQLite."""
+
+    def test_record_and_get_quiz_history(self, tmp_path):
+        from src.database import Database
+        db = Database(tmp_path / "test.db")
+        assert db.count_quizzes_today() == 0
+
+        # Grava 2 quizzes
+        db.record_quiz(
+            theme="DESAFIO DE CIENCIA",
+            title="TESTE DE CIENCIA #Shorts",
+            video_path="/path/to/quiz1.mp4",
+            youtube_id="yt_123",
+            youtube_url="https://youtube.com/shorts/yt_123",
+            status="published",
+        )
+        db.record_quiz(
+            theme="DESAFIO DE ANIMAIS",
+            title="TESTE DE ANIMAIS #Shorts",
+            video_path="/path/to/quiz2.mp4",
+            youtube_id="yt_456",
+            youtube_url="https://youtube.com/shorts/yt_456",
+            status="published",
+        )
+
+        assert db.count_quizzes_today() == 2
+        history = db.get_quiz_history(limit=10)
+        assert len(history) == 2
+        assert history[0]["title"] == "TESTE DE ANIMAIS #Shorts"
+
+
+class TestQuizPipelineOrchestrator:
+    """Testes do orquestrador autônomo (6 vídeos/dia)."""
+
+    def test_run_cycle_success(self, tmp_path):
+        from src.database import Database
+        from src.publisher.base import PublishResult
+        from src.quiz.orchestrator import QuizPipelineOrchestrator
+
+        db = Database(tmp_path / "test_orch.db")
+        mock_curator = MagicMock()
+        q1 = QuizQuestion("P1?", ["A", "B"], 0)
+        mock_curator.generate_quiz.return_value = QuizData("Título Quiz", [q1])
+
+        mock_generator = MagicMock()
+        dummy_mp4 = tmp_path / "test.mp4"
+        dummy_mp4.write_bytes(b"mp4")
+        mock_generator.generate_video.return_value = dummy_mp4
+
+        mock_publisher = MagicMock()
+        mock_publisher.publish.return_value = PublishResult(
+            success=True,
+            platform="youtube_shorts",
+            post_id="vid_999",
+            url="https://youtube.com/shorts/vid_999",
+        )
+
+        orch = QuizPipelineOrchestrator(
+            db=db,
+            curator=mock_curator,
+            generator=mock_generator,
+            publisher=mock_publisher,
+            daily_limit=6,
+        )
+
+        res = orch.run_cycle()
+        assert res["success"] is True
+        assert res["url"] == "https://youtube.com/shorts/vid_999"
+        assert db.count_quizzes_today() == 1
+
+    def test_run_cycle_daily_limit_reached(self, tmp_path):
+        from src.database import Database
+        from src.quiz.orchestrator import QuizPipelineOrchestrator
+
+        db = Database(tmp_path / "test_orch_limit.db")
+        # Força 6 posts já gravados hoje
+        for i in range(6):
+            db.record_quiz(f"T{i}", f"Title{i}", f"/p/{i}.mp4", f"id_{i}", f"url_{i}")
+
+        orch = QuizPipelineOrchestrator(db=db, daily_limit=6)
+        res = orch.run_cycle()
+        assert res["success"] is False
+        assert res["reason"] == "daily_limit_reached"
+
+    def test_setup_scheduler_background(self, tmp_path):
+        from src.database import Database
+        from src.quiz.orchestrator import QuizPipelineOrchestrator
+
+        db = Database(tmp_path / "test_orch_sched.db")
+        orch = QuizPipelineOrchestrator(db=db)
+        scheduler = orch.setup_scheduler(interval_hours=4, run_immediately=False, blocking=False)
+        assert scheduler.running
+        job = scheduler.get_job("quiz_auto_publisher")
+        assert job is not None
+        scheduler.shutdown(wait=False)
+

@@ -1,6 +1,7 @@
 """Ponto de entrada principal da aplicação AutoShorts Pipeline."""
 
 import argparse
+from datetime import datetime
 import logging
 import sys
 from pathlib import Path
@@ -62,6 +63,67 @@ def cmd_once(args: argparse.Namespace, orchestrator: PipelineOrchestrator) -> in
     return 0
 
 
+def cmd_run_quiz(args: argparse.Namespace) -> int:
+    """Inicia o agendador autônomo de Quizzes (6 vídeos/dia a cada 4 horas)."""
+    from src.quiz.orchestrator import QuizPipelineOrchestrator
+
+    logger.info("Iniciando Pipeline de Quiz Viral no piloto automático (6 vídeos/dia)...")
+    interval = getattr(args, "interval_hours", 4)
+    run_initial = not getattr(args, "no_initial", False)
+
+    orchestrator = QuizPipelineOrchestrator()
+    orchestrator.setup_scheduler(interval_hours=interval, run_immediately=run_initial, blocking=True)
+    return 0
+
+
+def cmd_generate_quiz(args: argparse.Namespace) -> int:
+    """Gera um quiz com IA imediatamente e opcionalmente publica no YouTube."""
+    from src.quiz.ai_curator import AIQuizCurator
+    from src.quiz.generator import QuizGenerator
+    from src.publisher.youtube import YouTubeShortsPublisher
+
+    category = getattr(args, "category", None)
+    should_post = getattr(args, "post", False)
+
+    logger.info("Gerando Quiz imediatamente (Categoria: %s)...", category or "aleatória")
+    curator = AIQuizCurator()
+    quiz = curator.generate_quiz(category=category)
+
+    generator = QuizGenerator()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    video_path = generator.generate_video(quiz, output_filename=f"quiz_{timestamp}.mp4")
+
+    print(f"\nVídeo de Quiz gerado com sucesso!")
+    print(f"Título: {quiz.title}")
+    print(f"Arquivo: {video_path}")
+
+    if should_post:
+        logger.info("Publicando no YouTube Shorts...")
+        publisher = YouTubeShortsPublisher(privacy_status="public")
+        res = publisher.publish(
+            video_path=video_path,
+            title=quiz.title,
+            description=f"{quiz.intro_text}\n\n#Shorts #quiz #curiosidades",
+            hashtags=["Shorts", "quiz", "curiosidades", "desafio"],
+        )
+        if res.success:
+            print(f"🎉 Publicado no YouTube: {res.url}")
+            db = Database(settings.DB_PATH)
+            db.record_quiz(
+                theme=quiz.theme.title,
+                title=quiz.title,
+                video_path=str(video_path),
+                youtube_id=res.post_id,
+                youtube_url=res.url,
+                status="published",
+            )
+        else:
+            print(f"❌ Falha ao publicar: {res.error}")
+            return 1
+
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Constrói o parser de argumentos CLI."""
     parser = argparse.ArgumentParser(
@@ -73,7 +135,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     # Comando 'run'
-    subparsers.add_parser("run", help="Inicia o loop contínuo 24/7 com APScheduler")
+    subparsers.add_parser("run", help="Inicia o loop contínuo 24/7 de cortes de podcasts")
 
     # Comando 'add-channel'
     add_parser = subparsers.add_parser("add-channel", help="Cadastra canal para monitorar")
@@ -90,6 +152,38 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Comando 'once'
     subparsers.add_parser("once", help="Executa uma única rodada imediata (scout + publish)")
+
+    # Comando 'run-quiz' (Piloto Automático 6 vídeos/dia)
+    quiz_parser = subparsers.add_parser(
+        "run-quiz", help="Inicia o piloto automático de Quizzes (6 vídeos/dia a cada 4 horas)"
+    )
+    quiz_parser.add_argument(
+        "--interval-hours",
+        type=int,
+        default=4,
+        help="Intervalo em horas entre cada vídeo publicado (padrão: 4h = 6 vídeos/dia)",
+    )
+    quiz_parser.add_argument(
+        "--no-initial",
+        action="store_true",
+        help="Não executa um vídeo imediatamente na inicialização",
+    )
+
+    # Comando 'generate-quiz'
+    gen_parser = subparsers.add_parser(
+        "generate-quiz", help="Gera um vídeo de quiz imediatamente com IA"
+    )
+    gen_parser.add_argument(
+        "--category",
+        type=str,
+        default=None,
+        help="Categoria específica do quiz (ex: ciencia_e_universo, corpo_humano, etc.)",
+    )
+    gen_parser.add_argument(
+        "--post",
+        action="store_true",
+        help="Publica automaticamente no YouTube Shorts após a renderização",
+    )
 
     return parser
 
@@ -108,6 +202,10 @@ def main(argv=None) -> int:
         return cmd_add_channel(args, db)
     elif args.command == "once":
         return cmd_once(args, orchestrator)
+    elif args.command == "run-quiz":
+        return cmd_run_quiz(args)
+    elif args.command == "generate-quiz":
+        return cmd_generate_quiz(args)
 
     return 0
 

@@ -68,7 +68,10 @@ class YouTubeShortsPublisher(BasePublisher):
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(self.client_secrets_file), scopes=scopes
             )
-            credentials = flow.run_local_server(port=0)
+            try:
+                credentials = flow.run_local_server(port=8080)
+            except Exception:
+                credentials = flow.run_local_server(port=0)
             self.credentials_file.parent.mkdir(parents=True, exist_ok=True)
             self.credentials_file.write_text(credentials.to_json(), encoding="utf-8")
 

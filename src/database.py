@@ -91,6 +91,17 @@ class Database:
                     posted_at TEXT,
                     FOREIGN KEY (clip_id) REFERENCES clips (id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS quiz_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    theme TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    video_path TEXT NOT NULL,
+                    youtube_id TEXT,
+                    youtube_url TEXT,
+                    status TEXT NOT NULL DEFAULT 'published',
+                    created_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -382,3 +393,61 @@ class Database:
                 )
                 for row in rows
             ]
+
+    def record_quiz(
+        self,
+        theme: str,
+        title: str,
+        video_path: str,
+        youtube_id: Optional[str] = None,
+        youtube_url: Optional[str] = None,
+        status: str = "published",
+    ) -> int:
+        """Registra a geração e publicação de um vídeo de Quiz no histórico."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO quiz_history (theme, title, video_path, youtube_id, youtube_url, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    theme,
+                    title,
+                    video_path,
+                    youtube_id,
+                    youtube_url,
+                    status,
+                    datetime.now().isoformat(),
+                ),
+            )
+            return cursor.lastrowid
+
+    def get_quiz_history(self, limit: int = 50) -> List[sqlite3.Row]:
+        """Retorna os quizzes mais recentes gerados e publicados."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, theme, title, video_path, youtube_id, youtube_url, status, created_at
+                FROM quiz_history
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            return cursor.fetchall()
+
+    def count_quizzes_today(self) -> int:
+        """Conta quantos vídeos de quiz foram gerados/publicados na data de hoje."""
+        today_prefix = datetime.now().strftime("%Y-%m-%d")
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT COUNT(*) FROM quiz_history
+                WHERE created_at LIKE ? AND status = 'published'
+                """,
+                (f"{today_prefix}%",),
+            )
+            return cursor.fetchone()[0]
