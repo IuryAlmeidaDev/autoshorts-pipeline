@@ -12,7 +12,7 @@ Started: 2026-10-01
 - [x] Task 6: Legendas Dinâmicas e Reenquadramento Vertical (9:16)
 - [x] Task 7: Publicadores de API Oficial (YouTube Shorts & Instagram Reels)
 - [x] Task 8: Publicadores Headless com Playwright (TikTok & Kwai)
-- [ ] Task 9: Orquestrador Geral e Dockerização
+- [x] Task 9: Orquestrador Geral e Dockerização
 
 ## Task Log
 - 2026-10-01: Task 1 completed (Commit: e81812fb2c65aeb30bb582beee9ec825e4641cbf) - Scaffolding, dependências, Settings com auto-criação de storage e testes unitários.
@@ -23,5 +23,6 @@ Started: 2026-10-01
 - 2026-10-01: Task 6 completed (Commit: 39d7b5153ddda952f153a4d2fb0095c0651c0d7a) - Legendas dinâmicas estilo karaokê ASS em 9:16 (1080x1920), integração faster-whisper, filtros FFmpeg smart_crop e blurred_background, escape de caminhos no Windows e 27 testes unitários (100% aprovação).
 - 2026-10-01: Task 7 completed (Commit: 2eccb5497adb64a8cd9852ce904e2254371e2c86) - Publicadores oficiais para YouTube Shorts (chunked upload, #Shorts) e Instagram Reels (fluxo 4 etapas Meta Graph API), PublishResult unificado e 22 testes unitários (100% aprovação).
 - 2026-10-01: Task 8 completed (Commit: 200f7179b7ddec70c2293752275b817e139bea54) - Publicadores headless baseados em Playwright para TikTok e Kwai com storage_state persistente, upload resiliente com fallback a iframes, formatação de legendas e 30 testes unitários (100% aprovação, 143 testes na suíte total).
+- 2026-10-01: Task 9 completed (Commit: 8b74614) - Orquestrador ponta a ponta (PipelineOrchestrator), agendador contínuo 24/7 (APScheduler), interface CLI completa (main.py: run, add-channel, once), Dockerfile com Linux/FFmpeg/fontes/Playwright e docker-compose.yml com volumes de persistência. 17 novos testes unitários (160 testes no total com 100% de sucesso e zero regressões).
 
 
