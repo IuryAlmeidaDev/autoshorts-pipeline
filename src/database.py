@@ -292,3 +292,57 @@ class Database:
                     """,
                     (status, external_post_id, error_log, post_id),
                 )
+
+    def get_clip(self, clip_id: int) -> Optional[Clip]:
+        """Retorna um clipe a partir do seu ID numérico."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, video_id, start_time, end_time, hook_title, viral_score, file_path, status, created_at
+                FROM clips
+                WHERE id = ?
+                """,
+                (clip_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return Clip(
+                id=row["id"],
+                video_id=row["video_id"],
+                start_time=row["start_time"],
+                end_time=row["end_time"],
+                hook_title=row["hook_title"],
+                viral_score=row["viral_score"],
+                file_path=row["file_path"],
+                status=row["status"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+
+    def get_posts_for_clip(self, clip_id: int) -> List[Post]:
+        """Retorna todas as postagens vinculadas a um determinado clipe."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, clip_id, platform, status, external_post_id, error_log, posted_at
+                FROM posts
+                WHERE clip_id = ?
+                ORDER BY id ASC
+                """,
+                (clip_id,),
+            )
+            rows = cursor.fetchall()
+            return [
+                Post(
+                    id=row["id"],
+                    clip_id=row["clip_id"],
+                    platform=row["platform"],
+                    status=row["status"],
+                    external_post_id=row["external_post_id"],
+                    error_log=row["error_log"],
+                    posted_at=datetime.fromisoformat(row["posted_at"]) if row["posted_at"] else None,
+                )
+                for row in rows
+            ]
