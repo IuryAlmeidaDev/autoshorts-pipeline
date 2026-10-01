@@ -55,5 +55,26 @@ class Settings(BaseSettings):
         return super().__getattribute__(name)
 
 
+def _ensure_ffmpeg_in_path() -> None:
+    """Garante que o FFmpeg instalado no Windows seja encontrado no PATH."""
+    import glob
+    import shutil
+
+    if shutil.which("ffmpeg") is not None:
+        return
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        candidates = glob.glob(
+            f"{local_app_data}/Microsoft/WinGet/Packages/Gyan.FFmpeg.Essentials_*/ffmpeg-*/bin"
+        )
+        for c in candidates:
+            if os.path.exists(os.path.join(c, "ffmpeg.exe")):
+                os.environ["PATH"] = c + os.pathsep + os.environ["PATH"]
+                return
+
+
+_ensure_ffmpeg_in_path()
+
 # Instância padrão de configurações
 settings = Settings()
+
