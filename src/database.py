@@ -56,6 +56,7 @@ class Database:
                     channel_id TEXT NOT NULL UNIQUE,
                     name TEXT NOT NULL,
                     active INTEGER NOT NULL DEFAULT 1,
+                    language TEXT NOT NULL DEFAULT 'pt',
                     created_at TEXT NOT NULL
                 );
 
@@ -93,21 +94,28 @@ class Database:
                 """
             )
 
-    def add_channel(self, channel_id: str, name: str) -> Channel:
+            # Migração idempotente para bases existentes
+            cursor.execute("PRAGMA table_info(channels)")
+            cols = [c[1] for c in cursor.fetchall()]
+            if "language" not in cols:
+                cursor.execute("ALTER TABLE channels ADD COLUMN language TEXT DEFAULT 'pt'")
+
+    def add_channel(self, channel_id: str, name: str, language: str = "pt") -> Channel:
         """Adiciona ou reativa um canal monitorado."""
         now_str = datetime.now().isoformat()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO channels (channel_id, name, active, created_at)
-                VALUES (?, ?, 1, ?)
+                INSERT INTO channels (channel_id, name, active, language, created_at)
+                VALUES (?, ?, 1, ?, ?)
                 ON CONFLICT(channel_id) DO UPDATE SET
                     name = excluded.name,
+                    language = excluded.language,
                     active = 1
-                RETURNING id, channel_id, name, active, created_at
+                RETURNING id, channel_id, name, active, language, created_at
                 """,
-                (channel_id, name, now_str),
+                (channel_id, name, language, now_str),
             )
             row = cursor.fetchone()
             return Channel(
@@ -115,16 +123,23 @@ class Database:
                 channel_id=row["channel_id"],
                 name=row["name"],
                 active=bool(row["active"]),
+                language=row["language"] if "language" in row.keys() and row["language"] else "pt",
                 created_at=datetime.fromisoformat(row["created_at"]),
             )
 
-    def get_active_channels(self) -> List[Channel]:
-        """Retorna todos os canais configurados e ativos."""
+    def get_active_channels(self, language: Optional[str] = None) -> List[Channel]:
+        """Retorna todos os canais configurados e ativos, opcionalmente filtrados por idioma."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT id, channel_id, name, active, created_at FROM channels WHERE active = 1 ORDER BY id ASC"
-            )
+            if language:
+                cursor.execute(
+                    "SELECT id, channel_id, name, active, language, created_at FROM channels WHERE active = 1 AND language = ? ORDER BY id ASC",
+                    (language,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, channel_id, name, active, language, created_at FROM channels WHERE active = 1 ORDER BY id ASC"
+                )
             rows = cursor.fetchall()
             return [
                 Channel(
@@ -132,6 +147,7 @@ class Database:
                     channel_id=row["channel_id"],
                     name=row["name"],
                     active=bool(row["active"]),
+                    language=row["language"] if "language" in row.keys() and row["language"] else "pt",
                     created_at=datetime.fromisoformat(row["created_at"]),
                 )
                 for row in rows

@@ -10,6 +10,7 @@ class Channel:
     channel_id: str = ""
     name: str = ""
     active: bool = True
+    language: str = "pt"
     id: Optional[int] = None
     created_at: datetime = field(default_factory=datetime.now)
 

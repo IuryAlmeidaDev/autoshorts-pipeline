@@ -308,6 +308,8 @@ class PipelineOrchestrator:
         self, blocking: bool = False
     ) -> Union[BackgroundScheduler, BlockingScheduler]:
         """Configura os jobs periódicos de scout e publicação com APScheduler."""
+        from datetime import datetime
+
         scheduler = BlockingScheduler() if blocking else BackgroundScheduler()
 
         scheduler.add_job(
@@ -316,6 +318,7 @@ class PipelineOrchestrator:
             minutes=self.settings.POLL_INTERVAL_MINUTES,
             id="scout_cycle",
             replace_existing=True,
+            next_run_time=datetime.now(),
         )
 
         scheduler.add_job(
