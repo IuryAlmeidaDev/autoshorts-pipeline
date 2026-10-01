@@ -1,0 +1,1 @@
+"""AutoShorts Pipeline tests package."""
