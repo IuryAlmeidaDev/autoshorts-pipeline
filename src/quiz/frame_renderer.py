@@ -149,8 +149,15 @@ class QuizFrameRenderer:
             width=4,
         )
 
-        # Ícone de cérebro / troféu destacado
-        draw.text((540, 620), "⚡ 🧠 ⚡", fill=(255, 255, 255), font=f_hero, anchor="mm")
+        # Badge de categoria interna do card
+        draw.rounded_rectangle(
+            [320, 580, 760, 650],
+            radius=20,
+            fill=(30, 41, 59),
+            outline=self.theme.accent_color,
+            width=2,
+        )
+        draw.text((540, 615), "QUIZ EXPRESS", fill=(250, 204, 21), font=f_badge, anchor="mm")
 
         # Texto Principal do Gancho
         draw.text(
@@ -192,7 +199,7 @@ class QuizFrameRenderer:
         # Rodapé
         draw.text(
             (540, 1680),
-            "👇 Comente sua pontuação no final!",
+            "Comente sua pontuação no final!",
             fill=(241, 245, 249),
             font=f_sub,
             anchor="mm",
@@ -336,15 +343,12 @@ class QuizFrameRenderer:
                         outline=self.theme.correct_border,
                         width=5,
                     )
-                    # Badge da Letra em Verde Neon
+                    # Badge da Letra em Verde Neon com Checkmark Vetorial
                     draw.ellipse([110, y + 25, 190, y + 105], fill=(34, 197, 94))
-                    draw.text(
-                        (150, y + 65),
-                        "✔",
-                        fill=(255, 255, 255),
-                        font=f_opt,
-                        anchor="mm",
-                    )
+                    cx, cy = 150, y + 65
+                    draw.line([(cx - 14, cy + 2), (cx - 4, cy + 14)], fill=(255, 255, 255), width=6)
+                    draw.line([(cx - 4, cy + 14), (cx + 16, cy - 12)], fill=(255, 255, 255), width=6)
+
                     # Texto da Opção
                     draw.text(
                         (220, y + 65),
@@ -353,7 +357,7 @@ class QuizFrameRenderer:
                         font=f_opt,
                         anchor="lm",
                     )
-                    # Tag "CORRETO! ✔" na ponta direita
+                    # Tag "CORRETO!" na ponta direita
                     draw.rounded_rectangle(
                         [780, y + 35, 970, y + 95],
                         radius=16,
@@ -395,7 +399,7 @@ class QuizFrameRenderer:
         if not show_reveal:
             draw.text(
                 (540, 1720),
-                "💬 Comente sua resposta rápido!",
+                "Comente sua resposta antes do tempo acabar!",
                 fill=(250, 204, 21),
                 font=f_cta,
                 anchor="mm",
@@ -403,7 +407,7 @@ class QuizFrameRenderer:
         else:
             draw.text(
                 (540, 1720),
-                "🔥 Você acertou? Deixe o like!",
+                "Acertou? Deixe o like e se inscreva!",
                 fill=(34, 197, 94),
                 font=f_cta,
                 anchor="mm",
@@ -429,30 +433,30 @@ class QuizFrameRenderer:
             width=4,
         )
 
-        draw.text((540, 660), "🏆 FIM DO DESAFIO! 🏆", fill=(250, 204, 21), font=f_hero, anchor="mm")
+        draw.text((540, 660), "FIM DO DESAFIO!", fill=(250, 204, 21), font=f_hero, anchor="mm")
         draw.text((540, 800), "Quantas você acertou?", fill=(255, 255, 255), font=f_sub, anchor="mm")
 
         # Opções de pontuação
         draw.rounded_rectangle([200, 890, 880, 970], radius=20, fill=(30, 41, 59))
-        draw.text((540, 930), "0 a 1: Principiante 🐣", fill=(241, 245, 249), font=f_badge, anchor="mm")
+        draw.text((540, 930), "0 a 1 acerto: Iniciante", fill=(241, 245, 249), font=f_badge, anchor="mm")
 
         draw.rounded_rectangle([200, 1000, 880, 1080], radius=20, fill=(30, 41, 59))
-        draw.text((540, 1040), "2 acertos: Quase Gênio 💡", fill=(56, 189, 248), font=f_badge, anchor="mm")
+        draw.text((540, 1040), "2 acertos: Quase Gênio", fill=(56, 189, 248), font=f_badge, anchor="mm")
 
         draw.rounded_rectangle([200, 1110, 880, 1190], radius=20, fill=(22, 101, 52), outline=(34, 197, 94), width=3)
-        draw.text((540, 1150), "3 de 3: Cérebro Supremo! 🧠👑", fill=(255, 255, 255), font=f_badge, anchor="mm")
+        draw.text((540, 1150), "3 de 3: Mente Brilhante!", fill=(255, 255, 255), font=f_badge, anchor="mm")
 
         # CTA final
         draw.text(
             (540, 1450),
-            "💬 Deixe sua pontuação nos comentários!",
+            "Deixe sua pontuação nos comentários!",
             fill=(250, 204, 21),
             font=f_sub,
             anchor="mm",
         )
         draw.text(
             (540, 1550),
-            "🔔 Se inscreva para o próximo teste!",
+            "Se inscreva para o próximo teste!",
             fill=(255, 255, 255),
             font=f_sub,
             anchor="mm",

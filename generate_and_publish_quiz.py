@@ -46,7 +46,7 @@ def main():
     )
 
     theme = QuizTheme(
-        title="🧠 DESAFIO DE CONHECIMENTOS",
+        title="DESAFIO DE CONHECIMENTOS",
         bg_gradient_top=(10, 15, 30),
         bg_gradient_mid=(30, 20, 60),
         bg_gradient_bot=(8, 12, 22),

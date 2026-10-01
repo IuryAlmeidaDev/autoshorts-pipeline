@@ -41,7 +41,7 @@ class QuizQuestion:
 class QuizTheme:
     """Configuração visual de temas e cores do Quiz."""
 
-    title: str = "🧠 DESAFIO DE CONHECIMENTOS"
+    title: str = "DESAFIO DE CONHECIMENTOS"
     bg_gradient_top: Tuple[int, int, int] = (10, 15, 30)
     bg_gradient_mid: Tuple[int, int, int] = (28, 22, 58)
     bg_gradient_bot: Tuple[int, int, int] = (8, 12, 22)
