@@ -234,7 +234,10 @@ class TestYouTubeShortsPublisher:
 
     def test_publish_auth_error_when_service_cannot_be_built(self, dummy_video):
         """Verifica que se o serviço não puder ser autenticado, retorna PublishResult de falha."""
-        pub = YouTubeShortsPublisher(client_secrets_file="non_existent_secret.json")
+        pub = YouTubeShortsPublisher(
+            client_secrets_file="non_existent_secret.json",
+            credentials_file="non_existent_token.json",
+        )
 
         result = pub.publish(
             video_path=dummy_video,
