@@ -27,6 +27,8 @@ class ClipMetadata:
     description: str = ""
     hashtags: List[str] = field(default_factory=list)
     viral_score: float = 0.0
+    translated_script: Optional[str] = None
+    voice_gender: str = "male"
 
     @property
     def duration(self) -> float:
@@ -140,6 +142,12 @@ def parse_llm_clip_response(
         except (ValueError, TypeError):
             viral_score = 8.0
 
+        raw_script = item.get("translated_script", item.get("script"))
+        translated_script = str(raw_script).strip() if raw_script is not None else None
+
+        raw_gender = str(item.get("voice_gender", item.get("gender", "male"))).strip().lower()
+        voice_gender = "female" if raw_gender in ("female", "mulher", "feminino", "f") else "male"
+
         clips.append(
             ClipMetadata(
                 start_time=round(start_time, 2),
@@ -148,6 +156,8 @@ def parse_llm_clip_response(
                 description=description,
                 hashtags=hashtags,
                 viral_score=round(viral_score, 2),
+                translated_script=translated_script,
+                voice_gender=voice_gender,
             )
         )
 
@@ -250,3 +260,63 @@ class CuratorAnalyzer:
         except Exception as exc:
             logger.warning("Falha na chamada ao modelo Gemini: %s", exc)
             return []
+
+    def analyze_and_translate_transcript(
+        self,
+        transcript_formatted: Optional[str],
+        max_clips: int = 3,
+        min_duration: int = 45,
+        max_duration: int = 90,
+    ) -> List[ClipMetadata]:
+        """Analisa a transcrição internacional, identifica momentos virais e traduz/adapta o roteiro para português falado."""
+        if not transcript_formatted or not str(transcript_formatted).strip():
+            logger.debug("Transcrição vazia fornecida para análise e tradução.")
+            return []
+
+        if not self.api_key:
+            logger.warning("GEMINI_API_KEY não configurada. Fallback seguro ativado: nenhum corte gerado.")
+            return []
+
+        prompt = (
+            "Você é um editor sênior e tradutor especializado em adaptar podcasts internacionais para cortes virais dublados em português brasileiro (TikTok, YouTube Shorts, Reels).\n"
+            "Analise a seguinte transcrição com marcações de tempo e selecione os momentos com MAIOR potencial viral.\n"
+            "\n"
+            "Critérios de seleção e adaptação:\n"
+            "- Momentos de alta retenção: polêmicas, revelações chocantes, conselhos transformadores ou histórias envolventes.\n"
+            f"- Cada corte DEVE durar entre {min_duration} e {max_duration} segundos no áudio original.\n"
+            f"- Selecione no máximo {max_clips} cortes no total.\n"
+            "- Traduza e adapte o conteúdo para um roteiro falado em português brasileiro natural ('translated_script'), direto ao ponto, com cadência conversacional ideal para narração e dublagem fluida (evite linguagem truncada ou excessivamente formal).\n"
+            "- Identifique o gênero da voz do orador principal ('voice_gender': 'male' ou 'female').\n"
+            "- Escreva um 'hook_title' em português, com letras maiúsculas ou gancho irresistível (máx 50 caracteres).\n"
+            "- Crie uma legenda envolvente em 'description' em português.\n"
+            "- Inclua de 3 a 5 'hashtags' virais com #.\n"
+            "- Atribua um 'viral_score' de 0.0 a 10.0.\n"
+            "\n"
+            "Retorne ESTRITAMENTE um JSON com uma lista de objetos no seguinte esquema:\n"
+            "[\n"
+            "  {\n"
+            '    "start_time": 45.0,\n'
+            '    "end_time": 105.0,\n'
+            '    "hook_title": "O MAIOR ERRO QUE COMETI!",\n'
+            '    "description": "Veja o momento em que...",\n'
+            '    "hashtags": ["#shorts", "#podcast", "#cortes"],\n'
+            '    "viral_score": 9.5,\n'
+            '    "translated_script": "Roteiro adaptado e dinâmico em português...",\n'
+            '    "voice_gender": "male"\n'
+            "  }\n"
+            "]\n"
+            "\n"
+            "Transcrição:\n"
+            f"{transcript_formatted}\n"
+        )
+
+        try:
+            raw_response = self._call_gemini_api(prompt)
+            clips = parse_llm_clip_response(
+                raw_response, min_duration=min_duration, max_duration=max_duration
+            )
+            return clips[:max_clips]
+        except Exception as exc:
+            logger.warning("Falha na chamada ao modelo Gemini para tradução: %s", exc)
+            return []
+

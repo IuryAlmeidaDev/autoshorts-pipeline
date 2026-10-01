@@ -226,6 +226,7 @@ def test_parse_llm_clip_response_corrupted_or_empty():
 def test_curator_analyzer_no_api_key_graceful_fallback():
     # Sem API key, deve retornar lista vazia sem quebrar a execução
     analyzer = CuratorAnalyzer(api_key="")
+    analyzer.api_key = ""
     clips = analyzer.analyze_transcript("[00:00 - 00:30] Conteúdo de teste.")
     assert clips == []
 
@@ -290,3 +291,131 @@ def test_curator_analyzer_respects_max_clips():
     with patch.object(analyzer, "_call_gemini_api", return_value=mock_json):
         clips = analyzer.analyze_transcript("[00:00 - 05:00] Transcrição longa...", max_clips=2, min_duration=45, max_duration=90)
         assert len(clips) == 2
+
+
+# ==========================================
+# 4. Testes de Tradução e Dublagem (Task Dub-2)
+# ==========================================
+
+def test_clip_metadata_translation_defaults():
+    clip = ClipMetadata(
+        start_time=10.0,
+        end_time=60.0,
+        hook_title="TESTE DE DEFAULT",
+    )
+    assert clip.translated_script is None
+    assert clip.voice_gender == "male"
+
+
+def test_parse_llm_clip_response_with_translated_script_and_gender():
+    raw_json = json.dumps([
+        {
+            "start_time": 30.0,
+            "end_time": 85.0,
+            "hook_title": "O SEGREDO DA PRODUTIVIDADE",
+            "description": "Dica de ouro em português.",
+            "hashtags": ["#foco", "#produtividade"],
+            "viral_score": 9.6,
+            "translated_script": "A grande verdade sobre o foco é que você precisa eliminar distrações antes de começar.",
+            "voice_gender": "female",
+        },
+        {
+            "start_time": 100.0,
+            "end_time": 160.0,
+            "hook_title": "NUNCA DESISTA",
+            "viral_score": 8.5,
+            "translated_script": "Quando eu comecei, ninguém acreditava no projeto.",
+            "voice_gender": "male",
+        },
+    ])
+
+    clips = parse_llm_clip_response(raw_json)
+    assert len(clips) == 2
+    assert clips[0].translated_script == "A grande verdade sobre o foco é que você precisa eliminar distrações antes de começar."
+    assert clips[0].voice_gender == "female"
+    assert clips[1].translated_script == "Quando eu comecei, ninguém acreditava no projeto."
+    assert clips[1].voice_gender == "male"
+
+
+def test_curator_analyzer_translate_no_api_key_graceful_fallback():
+    analyzer = CuratorAnalyzer(api_key="")
+    analyzer.api_key = ""
+    clips = analyzer.analyze_and_translate_transcript("[00:00 - 01:00] English transcript here.")
+    assert clips == []
+
+
+def test_curator_analyzer_translate_empty_transcript():
+    analyzer = CuratorAnalyzer(api_key="valid-test-key")
+    assert analyzer.analyze_and_translate_transcript("") == []
+    assert analyzer.analyze_and_translate_transcript("   ") == []
+    assert analyzer.analyze_and_translate_transcript(None) == []
+
+
+def test_curator_analyzer_translate_successful_generation():
+    analyzer = CuratorAnalyzer(api_key="valid-test-key")
+
+    mock_llm_response = json.dumps([
+        {
+            "start_time": 45.0,
+            "end_time": 105.0,
+            "hook_title": "A MAIOR REVELAÇÃO DA MINHA VIDA!",
+            "description": "Trecho traduzido e dublado.",
+            "hashtags": ["#dublado", "#cortes", "#viral"],
+            "viral_score": 9.8,
+            "translated_script": "Eu passei dez anos tentando descobrir a resposta até perceber que era simples.",
+            "voice_gender": "male",
+        }
+    ])
+
+    with patch.object(analyzer, "_call_gemini_api", return_value=mock_llm_response) as mock_api:
+        transcript_sample = "[00:45 - 01:45] I spent ten years trying to figure out the answer until I realized it was simple."
+        clips = analyzer.analyze_and_translate_transcript(
+            transcript_sample,
+            max_clips=2,
+            min_duration=45,
+            max_duration=90,
+        )
+
+        assert mock_api.called
+        assert len(clips) == 1
+        clip = clips[0]
+        assert clip.hook_title == "A MAIOR REVELAÇÃO DA MINHA VIDA!"
+        assert clip.translated_script == "Eu passei dez anos tentando descobrir a resposta até perceber que era simples."
+        assert clip.voice_gender == "male"
+        assert clip.viral_score == 9.8
+
+
+def test_curator_analyzer_translate_api_error_fallback():
+    analyzer = CuratorAnalyzer(api_key="valid-test-key")
+
+    with patch.object(analyzer, "_call_gemini_api", side_effect=Exception("Gemini quota exceeded")):
+        clips = analyzer.analyze_and_translate_transcript("[00:00 - 01:00] Some English speech.")
+        assert clips == []
+
+
+def test_curator_analyzer_translate_respects_max_clips():
+    analyzer = CuratorAnalyzer(api_key="valid-test-key")
+
+    mock_json = json.dumps([
+        {
+            "start_time": 10.0,
+            "end_time": 60.0,
+            "hook_title": f"Corte Traduzido {i}",
+            "viral_score": 9.0,
+            "translated_script": f"Roteiro traduzido {i}",
+            "voice_gender": "female",
+        }
+        for i in range(5)
+    ])
+
+    with patch.object(analyzer, "_call_gemini_api", return_value=mock_json):
+        clips = analyzer.analyze_and_translate_transcript(
+            "[00:00 - 05:00] Long english transcript...",
+            max_clips=2,
+            min_duration=45,
+            max_duration=90,
+        )
+        assert len(clips) == 2
+        assert clips[0].voice_gender == "female"
+        assert clips[0].translated_script == "Roteiro traduzido 0"
+
