@@ -157,6 +157,39 @@ def cmd_generate_story(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate_science(args: argparse.Namespace) -> int:
+    """Gera um vídeo de artigo/descoberta científica com visual cósmico e legendas dinâmicas."""
+    from src.science.ai_curator import AIScienceCurator
+    from src.science.generator import ScienceShortsGenerator
+
+    topic = getattr(args, "topic", None)
+    bg = getattr(args, "bg", None)
+    gender = getattr(args, "gender", "male")
+
+    logger.info("Gerando Vídeo Científico imediatamente (Tópico: %s)...", topic or "aleatório")
+    curator = AIScienceCurator()
+    article = curator.generate_article(topic=topic)
+
+    generator = ScienceShortsGenerator()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    video_path = generator.generate_video(
+        article=article,
+        background_video=bg,
+        output_filename=f"science_shorts_{timestamp}.mp4",
+        voice_gender=gender,
+    )
+
+    print(f"\n=======================================================")
+    print(f"🔬 VÍDEO DE DESCOBERTA CIENTÍFICA GERADO COM SUCESSO!")
+    print(f"Título: {article.title}")
+    print(f"Revista: {article.journal} | Categoria: {article.category}")
+    print(f"Arquivo: {video_path}")
+    print(f"Tamanho: {video_path.stat().st_size / (1024 * 1024):.2f} MB")
+    print(f"Tags: {' '.join(article.tags)}")
+    print(f"=======================================================\n")
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Constrói o parser de argumentos CLI."""
     parser = argparse.ArgumentParser(
@@ -242,6 +275,30 @@ def create_parser() -> argparse.ArgumentParser:
         help="Gênero da voz neural (male ou female)",
     )
 
+    # Comando 'generate-science'
+    sci_parser = subparsers.add_parser(
+        "generate-science", help="Gera um vídeo de artigo/descoberta científica imediatamente com IA e visual cósmico"
+    )
+    sci_parser.add_argument(
+        "--topic",
+        type=str,
+        default=None,
+        help="Tópico científico (ex: biotecnologia_e_longevidade, astronomia_e_james_webb, etc.)",
+    )
+    sci_parser.add_argument(
+        "--bg",
+        type=str,
+        default=None,
+        help="Caminho personalizado para o vídeo de fundo espacial/científico",
+    )
+    sci_parser.add_argument(
+        "--gender",
+        type=str,
+        default="male",
+        choices=["male", "female"],
+        help="Gênero da voz neural (male ou female)",
+    )
+
     return parser
 
 
@@ -265,6 +322,8 @@ def main(argv=None) -> int:
         return cmd_generate_quiz(args)
     elif args.command == "generate-story":
         return cmd_generate_story(args)
+    elif args.command == "generate-science":
+        return cmd_generate_science(args)
 
     return 0
 
