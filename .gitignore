@@ -41,6 +41,7 @@ secrets/*
 !secrets/.gitkeep
 !storage/temp/.gitkeep
 !storage/output/.gitkeep
+*.zip
 
 # IDE & OS
 .vscode/
