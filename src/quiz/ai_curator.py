@@ -175,20 +175,29 @@ class AIQuizCurator:
             except Exception as e:
                 logger.warning("Falha ao inicializar Gemini Client no AIQuizCurator: %s", e)
 
-    def generate_quiz(self, category: Optional[str] = None) -> QuizData:
-        """Gera um quiz completo e inédito com 3 perguntas, título, descrição e tema visual."""
+    def generate_quiz(
+        self,
+        category: Optional[str] = None,
+        avoid_titles: Optional[List[str]] = None,
+    ) -> QuizData:
+        """Gera um quiz completo e inédito com 3 perguntas, título único, descrição e tema visual."""
         chosen_cat = category or random.choice(QUIZ_CATEGORIES)
         cat_formatted = chosen_cat.replace("_", " ").title()
 
         logger.info("Gerando quiz com IA para categoria: %s", cat_formatted)
 
-        prompt = f"""Atue como um criador de conteúdo viral para YouTube Shorts e TikTok especialista em Quizzes e Trivia.
-Crie um quiz de alta retenção sobre a categoria: '{cat_formatted}'.
+        avoid_clause = ""
+        if avoid_titles:
+            recent_sample = [f"'{t}'" for t in avoid_titles[:8]]
+            avoid_clause = f"\nIMPORTANTE: NÃO repita nenhum destes títulos já postados recentemente: {', '.join(recent_sample)}."
+
+        prompt = f"""Atue como um roteirista viral de YouTube Shorts e TikTok especialista em Quizzes com milhões de visualizações.
+Crie um quiz de alta retenção e curiosidade sobre a categoria: '{cat_formatted}'.
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (APENAS JSON PURO, SEM TEXTO ADICIONAL):
 {{
   "theme_title": "DESAFIO DE {cat_formatted.upper()}",
-  "video_title": "TESTE DE {cat_formatted.upper()}! Quantas você acerta? #Shorts",
+  "video_title": "TÍTULO ÚNICO E CURIOSO BASEADO NA PERGUNTA MAIS CHOCANTE #Shorts",
   "description": "Duvido você acertar 3 de 3! Comente sua pontuação nos comentários! #Shorts #quiz #{chosen_cat}",
   "intro_text": "Duvido você acertar essas 3 perguntas! Preste atenção e comente quantas acertou!",
   "outro_text": "E aí, quantas você acertou? Deixe nos comentários e se inscreva para o próximo teste!",
@@ -215,11 +224,17 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (APENAS JSON PURO, SEM TEXTO ADICIONAL):
 }}
 
 REGRAS CRÍTICAS:
-1. NÃO USE NENHUM EMOJI nos campos theme_title, intro_text, outro_text, question, options ou explanation! Apenas texto limpo em português.
-2. Cada pergunta DEVE ter exatamente 4 opções curtas (1 a 4 palavras cada).
-3. Apenas 1 opção correta com correct_index (0 a 3).
-4. Forneça exatamente 3 perguntas.
-5. Fatos 100% verídicos e cientificamente/historicamente precisos.
+1. O 'video_title' DEVE SER 100% INÉDITO, MAGNÉTICO E ESPECÍFICO!
+   Exemplos de ótimos títulos com gancho de curiosidade:
+   - "3 Perguntas que 90% das pessoas erram! Você consegue?"
+   - "Duvido você acertar a 3ª pergunta! Teste rápido"
+   - "Qual o animal mais estranho do mundo? Quase todos erram!"
+   NUNCA use títulos genéricos e repetidos!{avoid_clause}
+2. NÃO USE NENHUM EMOJI nos campos theme_title, video_title, intro_text, outro_text, question, options ou explanation! Apenas texto limpo em português.
+3. Cada pergunta DEVE ter exatamente 4 opções curtas (1 a 4 palavras cada).
+4. Apenas 1 opção correta com correct_index (0 a 3).
+5. Forneça exatamente 3 perguntas.
+6. Fatos 100% verídicos e cientificamente/historicamente precisos.
 """
 
         parsed_data = None
@@ -241,7 +256,14 @@ REGRAS CRÍTICAS:
 
         if not parsed_data or "questions" not in parsed_data:
             logger.info("Utilizando fallback curado para o quiz.")
-            parsed_data = random.choice(FALLBACK_QUIZZES)
+            matching_fallback = None
+            if chosen_cat:
+                for fb in FALLBACK_QUIZZES:
+                    fb_title = fb.get("theme_title", "").lower()
+                    if any(part in fb_title for part in chosen_cat.lower().split("_")):
+                        matching_fallback = fb
+                        break
+            parsed_data = matching_fallback or random.choice(FALLBACK_QUIZZES)
 
         # Higieniza e constrói as perguntas
         questions: List[QuizQuestion] = []

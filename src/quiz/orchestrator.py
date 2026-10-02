@@ -98,8 +98,10 @@ class QuizPipelineOrchestrator:
                     logger.warning("Falha ao publicar vídeo pendente: %s", result.error)
                     return {"success": False, "error": result.error, "video_path": str(video_path)}
 
-            # 3. Curadoria com IA
-            quiz: QuizData = self.curator.generate_quiz(category=category)
+            # 3. Curadoria com IA (evitando títulos repetidos recentemente)
+            recent_history = self.db.get_quiz_history(limit=15)
+            recent_titles = [row["title"] for row in recent_history if row["title"]]
+            quiz: QuizData = self.curator.generate_quiz(category=category, avoid_titles=recent_titles)
             logger.info("Quiz gerado pela IA: '%s' (%s)", quiz.title, quiz.theme.title)
 
             # 4. Renderização do Vídeo

@@ -277,30 +277,41 @@ class QuizGenerator:
             ], description="Segmento de Encerramento")
             segments.append(seg_outro)
 
-            # 5. Concatena todos os segmentos no arquivo final
-            logger.info("Concatenando %d segmentos no vídeo final: %s", len(segments), final_output)
+            # 5. Concatena todos os segmentos no arquivo final com trilha sonora de suspense
+            logger.info("Concatenando %d segmentos e adicionando trilha sonora de suspense...", len(segments))
             concat_list_file = session_dir / "concat_list.txt"
             with open(concat_list_file, "w", encoding="utf-8") as f:
                 for seg in segments:
-                    # Escape seguro de caminho para concat demuxer
                     safe_path = str(seg.resolve()).replace("\\", "/")
                     f.write(f"file '{safe_path}'\n")
 
+            temp_concatenated = session_dir / "concatenated_raw.mp4"
             self._run_ffmpeg([
                 "ffmpeg", "-y",
                 "-f", "concat",
                 "-safe", "0",
                 "-i", str(concat_list_file),
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "18",
-                "-pix_fmt", "yuv420p",
+                "-c", "copy",
+                str(temp_concatenated),
+            ], description="Concatenação dos Segmentos")
+
+            # Gera trilha sonora de suspense com pulso rítmico a 120 BPM
+            bgm_audio = self.sfx.generate_suspense_bgm(duration_sec=75.0, bpm=120.0)
+
+            # Mixa a voz com a música de fundo (-18dB) e renderiza o arquivo final
+            self._run_ffmpeg([
+                "ffmpeg", "-y",
+                "-i", str(temp_concatenated),
+                "-i", str(bgm_audio),
+                "-filter_complex",
+                "[0:a]volume=1.0[voice];[1:a]volume=0.22[bgm];[voice][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+                "-map", "0:v",
+                "-map", "[aout]",
+                "-c:v", "copy",
                 "-c:a", "aac",
                 "-b:a", "192k",
-                "-ar", "44100",
-                "-ac", "2",
                 str(final_output),
-            ], description="Concatenação Final")
+            ], description="Mixagem Final com Trilha de Suspense")
 
             logger.info("Vídeo de quiz finalizado com sucesso! Tamanho: %.2f MB", final_output.stat().st_size / (1024 * 1024))
             return final_output
