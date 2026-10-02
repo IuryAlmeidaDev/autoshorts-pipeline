@@ -164,9 +164,14 @@ def cmd_generate_science(args: argparse.Namespace) -> int:
 
     topic = getattr(args, "topic", None)
     bg = getattr(args, "bg", None)
-    gender = getattr(args, "gender", "male")
+    voice_mode = getattr(args, "voice_mode", None)
+    gender = getattr(args, "gender", None)
+    if not voice_mode and gender:
+        voice_mode = gender
+    if not voice_mode:
+        voice_mode = "dual"
 
-    logger.info("Gerando Vídeo Científico imediatamente (Tópico: %s)...", topic or "aleatório")
+    logger.info("Gerando Vídeo Científico imediatamente (Tópico: %s | Modo de Voz: %s)...", topic or "aleatório", voice_mode)
     curator = AIScienceCurator()
     article = curator.generate_article(topic=topic)
 
@@ -176,13 +181,14 @@ def cmd_generate_science(args: argparse.Namespace) -> int:
         article=article,
         background_video=bg,
         output_filename=f"science_shorts_{timestamp}.mp4",
-        voice_gender=gender,
+        voice_mode=voice_mode,
     )
 
     print(f"\n=======================================================")
     print(f"🔬 VÍDEO DE DESCOBERTA CIENTÍFICA GERADO COM SUCESSO!")
     print(f"Título: {article.title}")
     print(f"Revista: {article.journal} | Categoria: {article.category}")
+    print(f"Modo de Voz: {voice_mode} ({'Dual Homem/Mulher' if voice_mode == 'dual' else voice_mode})")
     print(f"Arquivo: {video_path}")
     print(f"Tamanho: {video_path.stat().st_size / (1024 * 1024):.2f} MB")
     print(f"Tags: {' '.join(article.tags)}")
@@ -292,11 +298,19 @@ def create_parser() -> argparse.ArgumentParser:
         help="Caminho personalizado para o vídeo de fundo espacial/científico",
     )
     sci_parser.add_argument(
+        "--voice-mode",
+        dest="voice_mode",
+        type=str,
+        default="dual",
+        choices=["dual", "male", "female"],
+        help="Modo de voz neural: 'dual' (Homem e Mulher alternados) ou voz fixa ('male', 'female')",
+    )
+    sci_parser.add_argument(
         "--gender",
         type=str,
-        default="male",
+        default=None,
         choices=["male", "female"],
-        help="Gênero da voz neural (male ou female)",
+        help="Gênero de voz neural para voz única (opcional, sobrescreve para voz única)",
     )
 
     return parser

@@ -116,8 +116,68 @@ class TestScienceShortsGenerator:
             article=article,
             background_video=dummy_bg,
             output_filename=out_file,
+            voice_mode="male",
         )
 
         assert result == out_file
         assert mock_synth.synthesize.call_count == 1
         assert mock_run.call_count == 1
+
+    @patch("src.science.generator.subprocess.run")
+    @patch("src.science.generator.get_audio_duration_seconds")
+    def test_generate_video_dual_voice_flow(self, mock_duration, mock_run, tmp_path):
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_duration.return_value = 5.0
+
+        mock_synth = MagicMock()
+        dummy_audio = tmp_path / "voice_part.mp3"
+        dummy_audio.write_bytes(b"dummy mp3 data")
+        mock_synth.synthesize.return_value = (
+            dummy_audio,
+            [WordTimestamp("Olá", 0.0, 0.5), WordTimestamp("mundo", 0.5, 1.0)],
+        )
+
+        dummy_bg = tmp_path / "dummy_space.mp4"
+        dummy_bg.write_bytes(b"0" * 20000)
+
+        out_file = tmp_path / "out" / "science_dual.mp4"
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        out_file.write_bytes(b"dummy final mp4")
+
+        generator = ScienceShortsGenerator(
+            output_dir=tmp_path / "out",
+            temp_dir=tmp_path / "tmp",
+            voice_synthesizer=mock_synth,
+            default_bg_path=dummy_bg,
+        )
+
+        article = ScienceArticle(
+            title="Avanço histórico na medicina regenerativa",
+            segments=[
+                {"speaker": "male", "text": "Primeira parte com apresentador."},
+                {"speaker": "female", "text": "Segunda parte com cientista."},
+            ],
+        )
+
+        result = generator.generate_video(
+            article=article,
+            background_video=dummy_bg,
+            output_filename=out_file,
+            voice_mode="dual",
+        )
+
+        assert result == out_file
+        assert mock_synth.synthesize.call_count == 2
+        # mock_run é chamado para o concat de áudio e para o render final do vídeo
+        assert mock_run.call_count >= 2
+
+    def test_resolve_background_thematic(self, tmp_path):
+        generator = ScienceShortsGenerator(
+            output_dir=tmp_path / "out",
+            temp_dir=tmp_path / "tmp",
+        )
+        bio_bg = generator.resolve_background(category="BIOTECNOLOGIA", topic="Proteína IL-11 e longevidade")
+        assert "dna" in bio_bg.name.lower() or bio_bg.exists()
+
+        astro_bg = generator.resolve_background(category="ASTROFÍSICA", topic="Galáxias primitivas do James Webb")
+        assert "space" in astro_bg.name.lower() or astro_bg.exists()

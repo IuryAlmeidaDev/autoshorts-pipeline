@@ -15,6 +15,8 @@ class ScienceArticle:
     reads_count: str = "94.2k"
     hook_text: str = ""
     full_script: str = ""
+    segments: List[dict] = field(default_factory=list)
+    voice_mode: str = "dual"
     tags: List[str] = field(
         default_factory=lambda: [
             "#Shorts",
@@ -29,5 +31,12 @@ class ScienceArticle:
     def __post_init__(self):
         if not self.hook_text and self.title:
             self.hook_text = self.title
-        if not self.full_script:
+        if not self.full_script and self.segments:
+            self.full_script = " ".join(
+                s.get("text", "") for s in self.segments if isinstance(s, dict)
+            )
+        elif not self.full_script:
             self.full_script = self.title
+
+        if not self.segments and self.full_script:
+            self.segments = [{"speaker": "male", "text": self.full_script}]
