@@ -35,14 +35,14 @@ FALLBACK_STORIES = [
         "hook_text": "Eu descobri o segredo mais sujo do meu chefe porque ele esqueceu o notebook aberto na minha mesa.",
         "full_script": (
             "Eu descobri o segredo mais sujo do meu chefe porque ele esqueceu o notebook aberto na minha mesa. "
-            "Ele sempre foi aquele tipo de líder arrogante que humilhava estagiários e cobrava metas impossíveis. "
-            "Ontem ele saiu correndo para o almoço e deixou a tela desbloqueada em uma conversa do WhatsApp Web. "
-            "A curiosidade falou mais alto. Quando bati o olho, vi que ele estava repassando os orçamentos sigilosos da nossa empresa diretamente para o nosso maior concorrente. "
-            "E não para por aí. Em troca, ele recebia uma comissão gorda por fora em uma conta de pessoa física. "
-            "Eu tirei fotos de cada mensagem com o meu celular sem que ninguém percebesse. "
-            "Hoje de manhã, enviei anonimamente todas as provas para o comitê de ética e para os donos da empresa. "
-            "O clima aqui está um caos absoluto e a polícia acabou de chegar no escritório. "
-            "Você teria feito o mesmo ou ficaria na sua para não se queimar? Me conta nos comentários."
+            "Ele sempre foi aquele tipo de líder arrogante que humilhava estagiários, cobrava metas impossíveis e ameaçava demitir qualquer um por bobeira. "
+            "Ontem no final da tarde, ele saiu correndo desesperado para atender uma ligação e deixou a tela completamente desbloqueada em uma conversa do WhatsApp Web. "
+            "A curiosidade falou mais alto. Quando bati o olho, vi que ele estava repassando os orçamentos e projetos sigilosos da nossa empresa diretamente para o nosso maior concorrente do mercado. "
+            "E o pior de tudo: em troca, ele recebia uma comissão gorda por fora em uma conta de pessoa física no nome da própria esposa. "
+            "Eu gelei na hora, mas mantive a calma e tirei fotos nítidas de cada conversa com o meu celular sem que ninguém percebesse. "
+            "Hoje de manhã, reuni todas as provas e enviei um e-mail anônimo para o comitê de ética e diretamente para a presidência da empresa. "
+            "O clima aqui está um caos absoluto, o RH acabou de fechar a sala dele e a polícia civil acabou de chegar no escritório para escoltar ele até a viatura. "
+            "Você teria tido a coragem de denunciar ou ficaria na sua com medo de se queimar? Me conta a verdade nos comentários."
         ),
         "tags": ["#Shorts", "#reddit", "#historiasdoreddit", "#fofoca", "#trabalho", "#tiktok"],
     },
@@ -54,15 +54,15 @@ FALLBACK_STORIES = [
         "title": "Minha noiva me proibiu de convidar minha melhor amiga pro casamento, mas o motivo real me destruiu.",
         "hook_text": "Minha noiva me proibiu de convidar minha melhor amiga pro casamento, e o motivo real me destruiu.",
         "full_script": (
-            "Minha noiva me proibiu de convidar minha melhor amiga de infância para o nosso casamento, e o motivo me destruiu por completo. "
-            "Nós namoramos há quatro anos e estávamos com tudo pago para a cerimônia no final do mês. "
-            "Do nada, ela começou com uma crise absurda de ciúmes, exigindo que eu cortasse contato definitivo com a Ana, minha amiga de mais de quinze anos. "
-            "Eu achei super estranho porque as duas sempre se deram bem. "
-            "Até que no fim de semana, o noivo da irmã da minha noiva bebeu demais e deixou escapar a verdade. "
-            "A minha noiva confessou em um grupo de amigas que tinha ficado com o ex-namorado da Ana um mês antes de começarmos a namorar sério, e tinha pavor das duas conversarem e a história virar à tona. "
-            "Quando confrontei ela, ela não apenas admitiu, como tentou virar a culpa para mim. "
-            "Cancelei o casamento na mesma hora e bloqueei ela em tudo. "
-            "Fui babaca ou você teria cancelado na hora também? Comenta aí."
+            "Minha noiva me proibiu de convidar minha melhor amiga de infância para o nosso casamento, e o motivo real me destruiu por completo. "
+            "Nós namoramos há mais de quatro anos e estávamos com quase tudo pago e planejado para a cerimônia no final do próximo mês. "
+            "Do nada, ela começou com uma crise obsessiva de ciúmes, exigindo que eu cortasse qualquer contato com a Ana, minha amiga há mais de quinze anos. "
+            "Eu achei super estranho porque durante todos esses anos as duas sempre se deram super bem em todas as reuniões de família. "
+            "Até que no último churrasco de domingo, o noivo da irmã da minha noiva bebeu além da conta e acabou deixando escapar toda a verdade. "
+            "A minha noiva confessou em um grupo fechado que tinha ficado com o ex-namorado da Ana apenas um mês antes de começarmos a namorar sério, e tinha pavor das duas conversarem na festa e a história vir à tona na frente de todo mundo. "
+            "Quando chamei ela para conversar, ela não apenas admitiu sem demonstrar nenhum remorso, como tentou inverter a situação e colocar a culpa toda em mim. "
+            "Cancelei a festa, pedi meu dinheiro de volta e bloqueei ela em todas as redes sociais. "
+            "Eu fui impulsivo demais ou você teria tomado exatamente a mesma atitude? Comenta aí sua opinião."
         ),
         "tags": ["#Shorts", "#reddit", "#relacionamento", "#traicao", "#casamento", "#tiktok"],
     },
@@ -114,9 +114,9 @@ class AIStoryteller:
     def generate_story(
         self,
         theme: Optional[str] = None,
-        target_duration_sec: int = 50,
+        target_duration_sec: int = 70,
     ) -> RedditStory:
-        """Gera uma história viral inédita do Reddit com gancho magnético e roteiro de alta retenção."""
+        """Gera uma história viral inédita do Reddit com gancho magnético e roteiro de alta retenção (65-75s)."""
         chosen_theme = theme or random.choice(STORY_THEMES)
         theme_formatted = chosen_theme.replace("_", " ").title()
 
@@ -126,15 +126,16 @@ class AIStoryteller:
 
 Crie uma história inédita, realista, em primeira pessoa, sobre o tema: '{theme_formatted}'.
 
-REGRAS DE OURO DO ALGORITMO (RETENÇÃO MÁXIMA):
+REGRAS DE OURO DO ALGORITMO (MONETIZAÇÃO NO TIKTOK E YOUTUBE SHORTS):
 1. GANCHO IMEDIATO (0 a 3 segundos): Comece direto no ápice do conflito! NUNCA diga 'Oi galera', 'Vim aqui desabafar' ou 'Tudo bem?'. Comece com algo chocante em primeira pessoa!
-2. RITMO E ESTRUTURA (45 a 55 segundos de fala):
-   - Frase 1: O segredo/fato absurdo.
-   - Frases 2 a 4: O contexto e a reviravolta rápida.
-   - Frases 5 a 7: O clímax e a consequência da ação.
-   - Frase final: Pergunta engajadora convidando a audiência a opinar nos comentários.
+2. RITMO E ESTRUTURA PARA MONETIZAÇÃO TOTAL (65 a 75 segundos de narração):
+   - OBRIGATÓRIO: O campo 'full_script' DEVE TER ENTRE 180 E 220 PALAVRAS faladas. Isso é um critério mandatório e inegociável para ultrapassar 60 segundos e monetizar no Programa Criativo do TikTok e YouTube Shorts.
+   - Frase 1 (0 a 3s): O segredo/fato chocante que prende a atenção.
+   - Frases 2 a 4 (3 a 25s): O desenrolar rápido e contexto da situação.
+   - Frases 5 a 8 (25 a 55s): O clímax tenso, a reviravolta ou o confronto direto.
+   - Frases 9 a 10 (55 a 70s): A consequência chocante e a pergunta engajadora final convidando a audiência a opinar nos comentários.
 3. SEM EMOJIS: Não use emojis em nenhum campo.
-4. TEXTO NATURAL: Escrita falada fluida em português brasileiro.
+4. TEXTO NATURAL: Escrita falada fluida em português brasileiro com ritmo dramático envolvente.
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (APENAS JSON PURO):
 {{
@@ -144,7 +145,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (APENAS JSON PURO):
   "comments_count": "1.7k",
   "title": "Título magnético e intrigante do post (máximo 14 palavras)",
   "hook_text": "A primeira frase exata e chocante da narração",
-  "full_script": "O texto completo da história para ser narrado, com cerca de 130 a 160 palavras.",
+  "full_script": "O texto completo da história para ser narrado, OBRIGATORIAMENTE com cerca de 180 a 220 palavras.",
   "tags": ["#Shorts", "#reddit", "#historiasdoreddit", "#fofoca", "#tiktok"]
 }}
 """
