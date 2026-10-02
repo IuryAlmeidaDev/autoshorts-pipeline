@@ -60,6 +60,17 @@ class YouTubeShortsPublisher(BasePublisher):
             except Exception as e:
                 logger.warning("Falha ao carregar credentials_file: %s", e)
 
+        # Atualiza automaticamente o token expirado se houver refresh_token disponível
+        if credentials and credentials.expired and credentials.refresh_token:
+            try:
+                from google.auth.transport.requests import Request
+                credentials.refresh(Request())
+                self.credentials_file.parent.mkdir(parents=True, exist_ok=True)
+                self.credentials_file.write_text(credentials.to_json(), encoding="utf-8")
+                logger.info("Token OAuth do YouTube atualizado com sucesso via refresh_token.")
+            except Exception as e:
+                logger.warning("Falha ao atualizar token do YouTube via refresh_token: %s", e)
+
         if not credentials or not credentials.valid:
             if not self.client_secrets_file.exists():
                 raise FileNotFoundError(
@@ -75,8 +86,7 @@ class YouTubeShortsPublisher(BasePublisher):
             self.credentials_file.parent.mkdir(parents=True, exist_ok=True)
             self.credentials_file.write_text(credentials.to_json(), encoding="utf-8")
 
-        self._youtube_service = build("youtube", "v3", credentials=credentials)
-        return self._youtube_service
+        return build("youtube", "v3", credentials=credentials, cache_discovery=False)
 
     def publish(
         self,

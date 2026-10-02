@@ -49,17 +49,66 @@ class QuizPipelineOrchestrator:
             return {"success": False, "reason": "daily_limit_reached", "posts_today": posts_today}
 
         try:
-            # 2. Curadoria com IA
+            # 2. Verifica se há vídeos pendentes gerados anteriormente que falharam no upload
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, theme, title, video_path FROM quiz_history
+                    WHERE status = 'failed' AND youtube_id IS NULL
+                    ORDER BY id ASC LIMIT 1
+                    """
+                )
+                pending_row = cursor.fetchone()
+
+            if pending_row and Path(pending_row["video_path"]).exists():
+                pending_id = pending_row["id"]
+                pending_title = pending_row["title"]
+                video_path = Path(pending_row["video_path"])
+                logger.info("Retentando publicação de vídeo pendente: '%s' (%s)", pending_title, video_path)
+
+                hashtags = ["Shorts", "quiz", "curiosidades", "conhecimento", "desafio", "viral"]
+                result = self.publisher.publish(
+                    video_path=video_path,
+                    title=pending_title,
+                    description=f"{pending_title}\n\n#Shorts #quiz #curiosidades",
+                    hashtags=hashtags,
+                )
+
+                if result.success:
+                    with self.db.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            """
+                            UPDATE quiz_history
+                            SET status = 'published', youtube_id = ?, youtube_url = ?
+                            WHERE id = ?
+                            """,
+                            (result.post_id, result.url, pending_id),
+                        )
+                    logger.info("🎉 Vídeo pendente publicado com sucesso: %s", result.url)
+                    return {
+                        "success": True,
+                        "url": result.url,
+                        "post_id": result.post_id,
+                        "title": pending_title,
+                        "video_path": str(video_path),
+                    }
+                else:
+                    logger.warning("Falha ao publicar vídeo pendente: %s", result.error)
+                    return {"success": False, "error": result.error, "video_path": str(video_path)}
+
+            # 3. Curadoria com IA
             quiz: QuizData = self.curator.generate_quiz(category=category)
             logger.info("Quiz gerado pela IA: '%s' (%s)", quiz.title, quiz.theme.title)
 
-            # 3. Renderização do Vídeo
+            # 4. Renderização do Vídeo
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             video_filename = f"quiz_{timestamp}.mp4"
             video_path = self.generator.generate_video(quiz, output_filename=video_filename)
             logger.info("Vídeo do quiz renderizado: %s (%.2f MB)", video_path, video_path.stat().st_size / (1024 * 1024))
 
-            # 4. Publicação no YouTube Shorts
+            # 5. Publicação no YouTube Shorts
             hashtags = ["Shorts", "quiz", "curiosidades", "conhecimento", "desafio", "viral"]
             result = self.publisher.publish(
                 video_path=video_path,
@@ -68,7 +117,7 @@ class QuizPipelineOrchestrator:
                 hashtags=hashtags,
             )
 
-            # 5. Registro no Banco de Dados
+            # 6. Registro no Banco de Dados
             status = "published" if result.success else "failed"
             self.db.record_quiz(
                 theme=quiz.theme.title,
