@@ -124,6 +124,39 @@ def cmd_generate_quiz(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_generate_story(args: argparse.Namespace) -> int:
+    """Gera um vídeo de história do Reddit imediatamente com IA e gameplay de fundo."""
+    from src.stories.ai_storyteller import AIStoryteller
+    from src.stories.generator import RedditStoryGenerator
+
+    theme = getattr(args, "theme", None)
+    bg = getattr(args, "bg", None)
+    gender = getattr(args, "gender", "male")
+
+    logger.info("Gerando História do Reddit imediatamente (Tema: %s)...", theme or "aleatório")
+    storyteller = AIStoryteller()
+    story = storyteller.generate_story(theme=theme)
+
+    generator = RedditStoryGenerator()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    video_path = generator.generate_video(
+        story=story,
+        background_video=bg,
+        output_filename=f"reddit_story_{timestamp}.mp4",
+        voice_gender=gender,
+    )
+
+    print(f"\n=======================================================")
+    print(f"🎬 VÍDEO DE HISTÓRIA DO REDDIT GERADO COM SUCESSO!")
+    print(f"Título: {story.title}")
+    print(f"Subreddit: {story.subreddit} | Autor: {story.author}")
+    print(f"Arquivo: {video_path}")
+    print(f"Tamanho: {video_path.stat().st_size / (1024 * 1024):.2f} MB")
+    print(f"Tags: {' '.join(story.tags)}")
+    print(f"=======================================================\n")
+    return 0
+
+
 def create_parser() -> argparse.ArgumentParser:
     """Constrói o parser de argumentos CLI."""
     parser = argparse.ArgumentParser(
@@ -185,6 +218,30 @@ def create_parser() -> argparse.ArgumentParser:
         help="Publica automaticamente no YouTube Shorts após a renderização",
     )
 
+    # Comando 'generate-story'
+    story_parser = subparsers.add_parser(
+        "generate-story", help="Gera um vídeo de história do Reddit imediatamente com IA e gameplay"
+    )
+    story_parser.add_argument(
+        "--theme",
+        type=str,
+        default=None,
+        help="Tema da história (ex: segredos_de_familia, fofoca_de_trabalho, relacionamentos_e_traicao, etc.)",
+    )
+    story_parser.add_argument(
+        "--bg",
+        type=str,
+        default=None,
+        help="Caminho personalizado para o vídeo de fundo (gameplay/satisfatório)",
+    )
+    story_parser.add_argument(
+        "--gender",
+        type=str,
+        default="male",
+        choices=["male", "female"],
+        help="Gênero da voz neural (male ou female)",
+    )
+
     return parser
 
 
@@ -206,6 +263,8 @@ def main(argv=None) -> int:
         return cmd_run_quiz(args)
     elif args.command == "generate-quiz":
         return cmd_generate_quiz(args)
+    elif args.command == "generate-story":
+        return cmd_generate_story(args)
 
     return 0
 

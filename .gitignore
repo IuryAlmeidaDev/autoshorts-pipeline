@@ -41,6 +41,8 @@ secrets/*
 !secrets/.gitkeep
 !storage/temp/.gitkeep
 !storage/output/.gitkeep
+assets/backgrounds/*.mp4
+!assets/backgrounds/.gitkeep
 *.zip
 
 # IDE & OS
